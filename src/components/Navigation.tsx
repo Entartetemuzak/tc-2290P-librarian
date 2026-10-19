@@ -5,7 +5,7 @@ import Led from './Led';
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'presets', label: 'Presets' },
   { id: 'live', label: 'Live control' },
-  { id: 'backup', label: 'Backup files' },
+  { id: 'backup', label: 'Backups' },
   { id: 'midi', label: 'MIDI setup' },
   { id: 'settings', label: 'Pedal settings' },
   { id: 'monitor', label: 'SysEx monitor' },

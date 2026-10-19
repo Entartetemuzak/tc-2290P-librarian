@@ -121,13 +121,14 @@ export function newToneprintId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const cleanName = (name: string): string => (
+/** A name the pedal can show: printable ASCII, at most 19 characters. */
+export const cleanPresetName = (name: string): string => (
   name.replace(/[^\x20-\x7e]/g, '').slice(0, MAX_NAME_LENGTH)
 );
 
 /** Writes the name into data words 0–5 the way backup files store it (0, then 20 name bytes). */
 export function withNameHeader(data: readonly number[], name: string): number[] {
-  const clean = cleanName(name);
+  const clean = cleanPresetName(name);
   const view = new DataView(new ArrayBuffer(NAME_BYTES));
   for (let i = 0; i < clean.length; i += 1) view.setUint8(i, clean.charCodeAt(i));
   const result = [...data];
@@ -141,7 +142,7 @@ export function withNameHeader(data: readonly number[], name: string): number[] 
  * words 1–5 (20 bytes, null-terminated). The preset gets a new ID.
  */
 export function renamePreset(preset: LibraryPreset, name: string): LibraryPreset {
-  const clean = cleanName(name);
+  const clean = cleanPresetName(name);
   return { name: clean, id: newToneprintId(), data: withNameHeader(preset.data, clean) };
 }
 

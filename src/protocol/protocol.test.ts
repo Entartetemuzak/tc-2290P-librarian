@@ -7,7 +7,7 @@ import { decodeMessage } from './decode';
 import { extractSysExFromText, parseSysEx, toHex } from './frame';
 import {
   buildAcknowledgement, buildAssignmentsUpdate, buildPcMapRead, buildSelectPreset,
-  buildSettingsRead, buildToneprintRead, buildToneprintSearch, buildVersionRequest,
+  buildSettingsRead, buildToneprintRead, buildVersionRequest,
 } from './messages';
 import { pack7, unpack7 } from './packing';
 import { describeParameters } from './params';
@@ -107,13 +107,6 @@ describe('read requests match the vendor app queries', () => {
   it('reads the Program Change map one direction at a time', () => {
     const body = decodeMessage(buildPcMapRead(8, 1))?.body as { query: { where: unknown[] } };
     expect(body.query.where).toEqual([{ op: 0, field: 'direction', value: '1' }]);
-  });
-
-  it('asks for every factory preset by artistId', () => {
-    const body = decodeMessage(buildToneprintSearch(3, 'artistId', '1210'))?.body as {
-      query: { where: unknown[] };
-    };
-    expect(body.query.where).toEqual([{ op: 0, field: 'artistId', value: '1210' }]);
   });
 
   it('reads one TonePrint by ID with its data and artist', () => {

@@ -250,11 +250,38 @@ textarea { font-family: var(--font-lcd); font-size: var(--step--1); min-height: 
 
 /* ---------- library list: plain rows, unlike the pedal's green displays ---------- */
 .library-group + .library-group { margin-top: 1rem; }
+.library-group summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  list-style: none;
+}
+.library-group summary::-webkit-details-marker { display: none; }
+.library-group summary::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--silk-dim);
+  border-bottom: 2px solid var(--silk-dim);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.library-group[open] summary::before { transform: rotate(45deg); }
 .library-group h3 {
-  margin: 0 0 0.4rem;
+  margin: 0;
   font-size: var(--step--1);
   font-weight: 600;
   color: var(--silk-dim);
+}
+.library-group__empty {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-small);
+  font-size: var(--step--1);
+  color: var(--silk-faint);
 }
 .library-group ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
 .library-item {
@@ -542,6 +569,7 @@ td.mono, .mono { font-family: var(--font-lcd); }
   text-align: center;
   color: var(--silk-dim);
 }
+.change-list { max-height: 18rem; overflow-y: auto; border: 1px solid var(--rule); border-radius: var(--radius-small); }
 .drop-zone--active { border-color: var(--lamp-yellow); color: var(--lamp-yellow); }
 .visually-hidden {
   position: absolute;
@@ -576,5 +604,12 @@ td.mono, .mono { font-family: var(--font-lcd); }
 .modal__header h2 { margin: 0; font-size: var(--step-1); font-weight: 600; }
 .modal__body { padding: 1.25rem; overflow-y: auto; }
 .modal__actions { margin-bottom: 1.25rem; }
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule);
+}
 .param-columns { columns: 2 16rem; column-gap: 2rem; }
 .param-columns .param-group { break-inside: avoid; }

@@ -1,7 +1,5 @@
 import { createContext, useContext } from 'react';
-import type {
-  AppState, DetailsTarget, PresetSource, ViewId,
-} from './types';
+import type { AppState, DetailsTarget, ViewId } from './types';
 
 export interface AppActions {
   setView: (view: ViewId) => void;
@@ -14,21 +12,22 @@ export interface AppActions {
   sendControl: (controller: number, value: number) => void;
   setDelayTime: (milliseconds: number) => void;
   setChannel: (channel: number) => void;
-  setSource: (source: PresetSource) => void;
-  openBackup: (file: File) => void;
-  closeBackup: () => void;
-  renamePreset: (index: number, name: string) => void;
-  swapPresets: (from: number, to: number) => void;
-  saveBackup: () => void;
-  setExperimental: (enabled: boolean) => void;
-  readPresetNames: () => void;
-  loadIntoLocation: (index: number, toneprintId: string) => void;
-  forgetPresets: () => void;
   openDetails: (target: DetailsTarget) => void;
   closeDetails: () => void;
-  replaceInBackup: (index: number, toneprintId: string) => void;
-  findFactoryPresets: () => void;
-  writeBackupToPedal: () => void;
+  /** Puts a remembered preset on a pedal location. */
+  loadIntoLocation: (index: number, toneprintId: string) => void;
+  /** Swaps the presets on two pedal locations. */
+  swapOnPedal: (from: number, to: number) => void;
+  /** Stores the preset under a new name (a new TonePrint) on its location. */
+  renameOnPedal: (index: number, name: string) => void;
+  readPresetNames: () => void;
+  forgetPresets: () => void;
+  /** Saves everything on the pedal to a .tc2290B file. */
+  backUpPedal: () => void;
+  openBackup: (file: File) => void;
+  closeBackup: () => void;
+  /** Writes the open backup file to the pedal. */
+  restoreBackup: () => void;
   clearTraffic: () => void;
   dismissNotice: () => void;
 }

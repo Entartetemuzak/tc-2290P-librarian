@@ -14,13 +14,9 @@ export default function LibraryPanel() {
   const total = Object.keys(state.toneprints).length;
   const librarian = state.link === 'librarian';
 
-  let hint = 'Drag a preset onto a location in the backup file to replace it.';
-  if (state.source === 'pedal') {
-    hint = state.experimental && librarian
-      ? 'Drag a preset onto a location to put it on the pedal.'
-      : 'Click a preset for details. Putting presets on the pedal needs the experimental '
-        + 'functions under Backup files.';
-  }
+  const hint = librarian
+    ? 'Drag a preset onto a location to put it on the pedal. Click for details.'
+    : 'Every preset this browser has seen. Click for details; connect the pedal to use them.';
 
   return (
     <FillSection title={`Library (${total})`}>
@@ -34,30 +30,15 @@ export default function LibraryPanel() {
         />
       </label>
       <p className="small muted" style={{ margin: '0.5rem 0' }}>{hint}</p>
-      {state.experimental && librarian && (
-        <button
-          type="button"
-          className="button"
-          style={{ marginBottom: '0.6rem' }}
-          disabled={state.busy !== null}
-          onClick={actions.findFactoryPresets}
-        >
-          Find factory presets on the pedal
-        </button>
-      )}
       <div className="scroll-area">
-        {total === 0 && (
-          <p className="empty small">
-            No presets yet. Connect the pedal or open a backup file; presets appear here as they
-            are read and stay in this browser.
-          </p>
-        )}
-        {LIBRARY_GROUPS.map(({ kind, title }) => {
+        {LIBRARY_GROUPS.map(({ kind, title, empty }) => {
           const items = all.filter((t) => libraryKind(t) === kind);
-          if (items.length === 0) return null;
+          // While searching, groups without matches would only add noise.
+          if (needle && items.length === 0) return null;
           return (
-            <div key={kind} className="library-group">
-              <h3>{`${title} (${items.length})`}</h3>
+            <details key={kind} className="library-group" open>
+              <summary><h3>{`${title} (${items.length})`}</h3></summary>
+              {items.length === 0 && <p className="library-group__empty">{empty}</p>}
               <ul>
                 {items.map((t) => (
                   <li key={t.id}>
@@ -77,7 +58,7 @@ export default function LibraryPanel() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           );
         })}
         {total > 0 && all.length === 0 && (

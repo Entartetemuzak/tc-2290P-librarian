@@ -1,19 +1,27 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Led from '../components/Led';
 import Section from '../components/Section';
+import { changedLocations } from '../state/backups';
 import { useApp } from '../state/context';
+import { buildPresetSlots } from '../state/presets';
 
 export default function BackupView() {
   const { state, actions } = useApp();
   const fileId = useId();
-  const experimentalId = useId();
   const [dragging, setDragging] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const { library } = state;
+  const { backupFile } = state;
   const librarian = state.link === 'librarian';
+  const busy = state.busy !== null;
+  const slots = useMemo(() => buildPresetSlots(state), [state]);
+  const changes = useMemo(
+    () => (backupFile && librarian ? changedLocations(backupFile.presets, state.assignments) : []),
+    [backupFile, librarian, state.assignments],
+  );
 
   const openFiles = (files: FileList | null) => {
     const file = files?.[0];
+    setConfirming(false);
     if (file) actions.openBackup(file);
   };
 
@@ -21,60 +29,35 @@ export default function BackupView() {
     <>
       <div className="view-header">
         <div>
-          <h2>Backup files</h2>
+          <h2>Backups</h2>
           <p>
-            Open a .tc2290B file made with Backup Pedal in the official app. Rename and rearrange
-            presets, then save a new file and load it with Restore Backup. Nothing is uploaded:
-            files are read and written in your browser.
+            Save everything on the pedal to a file, or put a saved file back on the pedal. Files
+            use the same .tc2290B format as the official app and never leave your computer.
           </p>
         </div>
       </div>
 
-      <Section title="Backup file">
-        {library ? (
-          <>
-            <div className="status-line">
-              <Led state={library.checksumValid ? 'yellow' : 'red'} />
-              <span>
-                {library.checksumValid
-                  ? `${library.fileName}: ${library.presets.length} presets, checksum OK`
-                  : `${library.fileName}: checksum does not match`}
-              </span>
-            </div>
-            {library.modified && (
-              <div className="status-line">
-                <Led state="red" />
-                <span>Changed since opening. Save a new file to keep the changes.</span>
-              </div>
-            )}
-            <div className="button-row">
-              <button
-                type="button"
-                className="button button--primary"
-                onClick={actions.saveBackup}
-              >
-                Save backup file
-              </button>
-              <button
-                type="button"
-                className="button"
-                onClick={() => {
-                  actions.setSource('library');
-                  actions.setView('presets');
-                }}
-              >
-                Edit presets
-              </button>
-              <button type="button" className="button" onClick={actions.closeBackup}>
-                Close file
-              </button>
-            </div>
-            <p className="small muted">
-              Renamed presets get a new TonePrint ID, so Restore Backup uploads them instead of
-              keeping the old version on the pedal.
-            </p>
-          </>
-        ) : (
+      <Section title="Back up the pedal">
+        <p style={{ marginTop: 0 }}>
+          Saves all 128 presets and their locations to a .tc2290B file.
+        </p>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={!librarian || busy}
+            onClick={actions.backUpPedal}
+          >
+            Save pedal to file
+          </button>
+        </div>
+        {!librarian && (
+          <p className="small muted">Connect the pedal over USB to back it up.</p>
+        )}
+      </Section>
+
+      <Section title="Restore a backup">
+        {!backupFile ? (
           <label
             htmlFor={fileId}
             className={dragging ? 'drop-zone drop-zone--active' : 'drop-zone'}
@@ -97,20 +80,107 @@ export default function BackupView() {
               onChange={(e) => openFiles(e.target.files)}
             />
           </label>
+        ) : (
+          <>
+            <div className="status-line">
+              <Led state={backupFile.checksumValid ? 'yellow' : 'red'} />
+              <span>
+                {`${backupFile.fileName}: ${backupFile.presets.length} presets, ${
+                  backupFile.checksumValid ? 'checksum OK' : 'checksum does not match'}`}
+              </span>
+            </div>
+
+            {!librarian && (
+              <p className="small muted">
+                Connect the pedal over USB to see what would change and to restore.
+              </p>
+            )}
+
+            {librarian && changes.length === 0 && (
+              <p>This file matches what is on the pedal. There is nothing to restore.</p>
+            )}
+
+            {librarian && changes.length > 0 && (
+              <>
+                <p>
+                  {changes.length === 128
+                    ? 'Restoring replaces every location on the pedal.'
+                    : `Restoring changes ${changes.length} of 128 locations; `
+                      + 'the rest stay as they are.'}
+                </p>
+                <div className="table-wrap change-list">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Location</th>
+                        <th>On the pedal now</th>
+                        <th>From the file</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changes.map((index) => (
+                        <tr key={index}>
+                          <td className="mono">{slots[index]?.label}</td>
+                          <td>{slots[index]?.name ?? 'Unknown'}</td>
+                          <td>{backupFile.presets[index]?.name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {confirming ? (
+              <div className="warning" role="alert" style={{ marginTop: '0.9rem' }}>
+                {`Replace ${changes.length} presets on the pedal with the ones in `
+                  + `${backupFile.fileName}? Back up the pedal first if you may want them back.`}
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() => {
+                      setConfirming(false);
+                      actions.restoreBackup();
+                    }}
+                  >
+                    Restore to pedal
+                  </button>
+                  <button type="button" className="button" onClick={() => setConfirming(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button button--danger"
+                  disabled={!librarian || busy || changes.length === 0}
+                  onClick={() => setConfirming(true)}
+                >
+                  Restore to pedal…
+                </button>
+                <button type="button" className="button" onClick={actions.closeBackup}>
+                  Close file
+                </button>
+              </div>
+            )}
+          </>
         )}
       </Section>
 
       <Section title="Presets remembered in this browser">
         <p className="small" style={{ marginTop: 0 }}>
           {`${Object.keys(state.toneprints).length} presets. `}
-          Names and parameters are read from the pedal when you connect and from backup files you
-          open, then kept in this browser so they show up at once next time.
+          Read from the pedal when you connect and from backup files you open, and kept in this
+          browser for the library.
         </p>
         <div className="button-row">
           <button
             type="button"
             className="button"
-            disabled={!librarian || state.busy !== null}
+            disabled={!librarian || busy}
             onClick={actions.readPresetNames}
           >
             Read all presets from the pedal again
@@ -124,67 +194,6 @@ export default function BackupView() {
             Forget remembered presets
           </button>
         </div>
-      </Section>
-
-      <Section title="Experimental: write to the pedal">
-        <p className="small">
-          Writes presets to the pedal the way the official app does. Verified against captured
-          traffic only, so take a backup with the official app first. When enabled, the Presets
-          page can also put any remembered preset on a location.
-        </p>
-        <label className="checkbox" htmlFor={experimentalId}>
-          <input
-            id={experimentalId}
-            type="checkbox"
-            checked={state.experimental}
-            onChange={(e) => {
-              actions.setExperimental(e.target.checked);
-              setConfirming(false);
-            }}
-          />
-          Enable experimental functions
-        </label>
-        {state.experimental && (
-          <>
-            {confirming ? (
-              <div className="warning" role="alert">
-                <p style={{ marginTop: 0 }}>
-                  This uploads every preset in the file that the pedal does not already have,
-                  then overwrites all 128 preset locations. Continue?
-                </p>
-                <div className="button-row">
-                  <button
-                    type="button"
-                    className="button button--danger"
-                    onClick={() => {
-                      setConfirming(false);
-                      actions.writeBackupToPedal();
-                    }}
-                  >
-                    Write to pedal
-                  </button>
-                  <button type="button" className="button" onClick={() => setConfirming(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="button-row">
-                <button
-                  type="button"
-                  className="button button--danger"
-                  disabled={!librarian || !library || state.busy !== null}
-                  onClick={() => setConfirming(true)}
-                >
-                  Write this backup to the pedal…
-                </button>
-              </div>
-            )}
-            {!librarian && (
-              <p className="small muted">Connect to the pedal over USB to use these functions.</p>
-            )}
-          </>
-        )}
       </Section>
     </>
   );

@@ -15,16 +15,14 @@ export type LinkMode = 'disconnected' | 'connecting' | 'librarian' | 'controlOnl
 
 export type ViewId = 'presets' | 'live' | 'midi' | 'settings' | 'backup' | 'monitor';
 
-export type PresetSource = 'pedal' | 'library';
-
 /** A preset location (0–127) or a remembered preset (TonePrint ID). */
 export type DetailsTarget = { kind: 'location'; index: number } | { kind: 'library'; id: string };
 
-export interface LibraryState {
+/** A backup file opened for restoring to the pedal. */
+export interface BackupFileState {
   fileName: string;
   presets: LibraryPreset[];
   checksumValid: boolean;
-  modified: boolean;
 }
 
 export interface Notice {
@@ -50,14 +48,12 @@ export interface AppState {
   current: { board: number; slot: number } | null;
   liveDelayMs: number | null;
   lastPing: number | null;
-  library: LibraryState | null;
-  source: PresetSource;
+  backupFile: BackupFileState | null;
   selectedIndex: number;
   /** What the details dialog shows, if it is open. */
   details: DetailsTarget | null;
   traffic: TrafficEntry[];
   midiChannel: number;
-  experimental: boolean;
   busy: string | null;
   notice: Notice | null;
 }
@@ -76,15 +72,11 @@ export type Action = { type: 'setView'; view: ViewId }
   | { type: 'openDetails'; target: DetailsTarget }
   | { type: 'closeDetails' }
   | { type: 'push'; push: PedalPush }
-  | { type: 'libraryLoaded'; library: LibraryState }
-  | { type: 'libraryChanged'; presets: LibraryState['presets'] }
-  | { type: 'librarySaved' }
-  | { type: 'libraryClosed' }
-  | { type: 'setSource'; source: PresetSource }
+  | { type: 'backupOpened'; file: BackupFileState }
+  | { type: 'backupClosed' }
   | { type: 'select'; index: number }
   | { type: 'traffic'; entry: TrafficEntry }
   | { type: 'clearTraffic' }
   | { type: 'setChannel'; channel: number }
-  | { type: 'setExperimental'; enabled: boolean }
   | { type: 'busy'; label: string | null }
   | { type: 'notice'; notice: Notice | null };

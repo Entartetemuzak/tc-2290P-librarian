@@ -6,18 +6,18 @@ import {
   describeAccessError, findPedalPort, isWebMidiSupported, listPorts, requestMidiAccess,
 } from '../midi/webMidi';
 import {
-  type LibraryPreset, parseBackup, presetFromToneprint, renamePreset as renameLibraryPreset,
-  serializeBackup,
+  type LibraryPreset, cleanPresetName, newToneprintId, parseBackup, serializeBackup,
 } from '../protocol/backup';
 import { delayTimeDigits } from '../protocol/ccMap';
-import { EFFECT_ID_2290, FACTORY_ARTIST_ID } from '../protocol/constants';
+import { EFFECT_ID_2290, LOCAL_ARTIST_ID } from '../protocol/constants';
 import type { PresetAssignment, Toneprint } from '../protocol/model';
 import downloadText from '../utils/download';
 import { type AppActions, AppContext } from './context';
-import { boardOf } from './presets';
+import { backupFileName, presetsFromPedal } from './backups';
+import { boardOf, slotLabel } from './presets';
 import { clearToneprintCache, loadToneprintCache, saveToneprintCache } from './toneprintCache';
 import { initialState, reducer } from './reducer';
-import type { AppState, PresetSource, ViewId } from './types';
+import type { AppState, ViewId } from './types';
 
 const errorText = (error: unknown): string => (
   error instanceof Error ? error.message : 'Something went wrong.'
@@ -148,7 +148,6 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     const pcMap = await device.readPcMap();
     const ccMap = await device.readCcMap();
     dispatch({ type: 'pedalData', data: { pcMap, ccMap } });
-    dispatch({ type: 'setSource', source: 'pedal' });
     dispatch({ type: 'busy', label: null });
     stateRef.current = { ...stateRef.current, assignments };
     await readNames(device, false);
@@ -176,31 +175,31 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       })),
     });
     dispatch({
-      type: 'libraryLoaded',
-      library: {
-        fileName: file.name,
-        presets: doc.presets,
-        checksumValid: doc.checksumValid,
-        modified: false,
-      },
+      type: 'backupOpened',
+      file: { fileName: file.name, presets: doc.presets, checksumValid: doc.checksumValid },
     });
-    notify(
-      doc.checksumValid ? 'info' : 'error',
-      doc.checksumValid
-        ? `Opened ${file.name}: ${doc.presets.length} presets, checksum OK.`
-        : `Opened ${file.name}, but its checksum does not match. The app may refuse to restore it.`,
-    );
+    if (!doc.checksumValid) {
+      notify('error', `${file.name} has a checksum that does not match. It may have been edited.`);
+    }
   }, [notify]);
 
-  const saveBackupAsync = useCallback(async () => {
-    const { library } = stateRef.current;
-    if (!library) return;
-    const text = await serializeBackup(library.presets);
-    const base = library.fileName.replace(/\.tc2290B$/i, '');
-    downloadText(library.modified ? `${base}-edited.tc2290B` : `${base}.tc2290B`, text);
-    dispatch({ type: 'librarySaved' });
-    notify('info', 'Backup file saved. Restore it with the 2290 P app or Write to pedal.');
-  }, [notify]);
+  const backUpPedalAsync = useCallback(async () => {
+    const device = link.current;
+    if (!device) return;
+    await readNames(device, false);
+    const { presets, missing } = presetsFromPedal(
+      stateRef.current.assignments,
+      stateRef.current.toneprints,
+    );
+    if (missing.length > 0) {
+      notify('error', `Could not read ${missing.length} presets (${missing.slice(0, 5).join(', ')}`
+        + `${missing.length > 5 ? ' …' : ''}). Try again after Read all presets from the pedal.`);
+      return;
+    }
+    const name = backupFileName(new Date());
+    downloadText(name, await serializeBackup(presets));
+    notify('info', `Saved all 128 presets to ${name}.`);
+  }, [notify, readNames]);
 
   const loadIntoLocationAsync = useCallback(async (index: number, toneprintId: string) => {
     const device = link.current;
@@ -213,7 +212,7 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'busy', label: `Uploading ${toneprint.name}` });
       await device.uploadToneprint({
         ...toneprint,
-        artistId: toneprint.artistId || 'local',
+        artistId: toneprint.artistId || LOCAL_ARTIST_ID,
         effectId: toneprint.effectId || EFFECT_ID_2290,
       });
     }
@@ -224,30 +223,59 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     await device.writeAssignments([assignment]);
     dispatch({ type: 'push', push: { kind: 'assignmentsChanged', assignments: [assignment] } });
     dispatch({ type: 'busy', label: null });
-    notify('info', `${toneprint.name} is now on preset ${board}${slot === 0 ? 'A' : 'B'}.`);
+    notify('info', `${toneprint.name} is now on preset ${slotLabel(board, slot)}.`);
   }, [notify]);
 
-  const findFactoryAsync = useCallback(async () => {
+  const swapOnPedalAsync = useCallback(async (from: number, to: number) => {
     const device = link.current;
-    if (!device) return;
-    dispatch({ type: 'busy', label: 'Asking the pedal for factory presets' });
-    const found = await device.findToneprints('artistId', FACTORY_ARTIST_ID);
-    dispatch({ type: 'toneprints', toneprints: found });
+    const { assignments } = stateRef.current;
+    const at = (index: number) => assignments.find((a) => a.group === 0
+      && a.board === boardOf(index) && a.slot === index % 2);
+    const a = at(from);
+    const b = at(to);
+    if (!device || !a || !b || from === to) return;
+    const swapped: PresetAssignment[] = [
+      { ...a, toneprintId: b.toneprintId },
+      { ...b, toneprintId: a.toneprintId },
+    ];
+    dispatch({ type: 'busy', label: 'Swapping presets' });
+    await device.writeAssignments(swapped);
+    dispatch({ type: 'push', push: { kind: 'assignmentsChanged', assignments: swapped } });
     dispatch({ type: 'busy', label: null });
-    notify(
-      found.length > 0 ? 'info' : 'error',
-      found.length > 0
-        ? `The pedal returned ${found.length} factory presets.`
-        : 'The pedal returned no factory presets for this query.',
-    );
+    notify('info', `Swapped ${slotLabel(a.board, a.slot)} and ${slotLabel(b.board, b.slot)}.`);
   }, [notify]);
 
-  const writeBackupAsync = useCallback(async () => {
+  const renameOnPedalAsync = useCallback(async (index: number, name: string) => {
     const device = link.current;
-    const { library, assignments } = stateRef.current;
-    if (!device || !library) return;
+    const { assignments, toneprints } = stateRef.current;
+    const board = boardOf(index);
+    const slot = index % 2;
+    const current = assignments.find((a) => a.group === 0 && a.board === board && a.slot === slot);
+    const toneprint = current ? toneprints[current.toneprintId] : undefined;
+    const clean = cleanPresetName(name);
+    if (!device || !toneprint || !clean || clean === toneprint.name) return;
+    // Like STORE on the pedal: the renamed preset is a new TonePrint on the same location.
+    const renamed = {
+      ...toneprint, id: newToneprintId(), name: clean, artistId: LOCAL_ARTIST_ID,
+    };
+    dispatch({ type: 'busy', label: `Renaming to ${clean}` });
+    await device.uploadToneprint(renamed);
+    const assignment: PresetAssignment = {
+      group: 0, board, slot, toneprintId: renamed.id,
+    };
+    await device.writeAssignments([assignment]);
+    dispatch({ type: 'toneprints', toneprints: [renamed] });
+    dispatch({ type: 'push', push: { kind: 'assignmentsChanged', assignments: [assignment] } });
+    dispatch({ type: 'busy', label: null });
+    notify('info', `${slotLabel(board, slot)} is now called ${clean}.`);
+  }, [notify]);
+
+  const restoreBackupAsync = useCallback(async () => {
+    const device = link.current;
+    const { backupFile, assignments } = stateRef.current;
+    if (!device || !backupFile) return;
     const onPedal = new Set(assignments.map((a) => a.toneprintId));
-    const missing: LibraryPreset[] = library.presets.filter((p) => !onPedal.has(p.id));
+    const missing: LibraryPreset[] = backupFile.presets.filter((p) => !onPedal.has(p.id));
     for (let i = 0; i < missing.length; i += 1) {
       const preset = missing[i];
       if (preset) {
@@ -259,19 +287,20 @@ export default function AppProvider({ children }: { children: ReactNode }) {
           id: preset.id,
           name: preset.name,
           data: preset.data,
-          artistId: 'local',
+          artistId: LOCAL_ARTIST_ID,
           effectId: EFFECT_ID_2290,
         });
       }
     }
     dispatch({ type: 'busy', label: 'Writing preset locations' });
-    const next: PresetAssignment[] = library.presets.map((p, index) => ({
+    const next: PresetAssignment[] = backupFile.presets.map((p, index) => ({
       group: 0, board: boardOf(index), slot: index % 2, toneprintId: p.id,
     }));
     await device.writeAssignments(next);
     dispatch({ type: 'pedalData', data: { assignments: next } });
     dispatch({ type: 'busy', label: null });
-    notify('info', `Wrote ${missing.length} TonePrints and all 128 preset locations to the pedal.`);
+    dispatch({ type: 'backupClosed' });
+    notify('info', `Restored ${backupFile.fileName} to the pedal.`);
   }, [notify]);
 
   const actions = useMemo<AppActions>(() => ({
@@ -311,71 +340,39 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       });
     },
     setChannel: (channel) => dispatch({ type: 'setChannel', channel }),
-    setSource: (source: PresetSource) => dispatch({ type: 'setSource', source }),
-    openBackup: (file) => {
-      openBackupAsync(file).catch(report);
-    },
-    closeBackup: () => dispatch({ type: 'libraryClosed' }),
-    renamePreset: (index, name) => {
-      const { library } = stateRef.current;
-      const preset = library?.presets[index];
-      if (!library || !preset || preset.name === name) return;
-      const presets = [...library.presets];
-      const renamed = renameLibraryPreset(preset, name);
-      presets[index] = renamed;
-      dispatch({ type: 'libraryChanged', presets });
-      dispatch({
-        type: 'toneprints',
-        toneprints: [{ ...renamed, artistId: 'local', effectId: EFFECT_ID_2290 }],
-      });
-    },
-    swapPresets: (from, to) => {
-      const { library } = stateRef.current;
-      const a = library?.presets[from];
-      const b = library?.presets[to];
-      if (!library || !a || !b || from === to) return;
-      const presets = [...library.presets];
-      presets[from] = b;
-      presets[to] = a;
-      dispatch({ type: 'libraryChanged', presets });
-      dispatch({ type: 'select', index: to });
-    },
-    saveBackup: () => {
-      saveBackupAsync().catch(report);
-    },
-    setExperimental: (enabled) => dispatch({ type: 'setExperimental', enabled }),
-    readPresetNames: () => {
-      if (link.current) readNames(link.current, true).catch(report);
-    },
+    openDetails: (target) => dispatch({ type: 'openDetails', target }),
+    closeDetails: () => dispatch({ type: 'closeDetails' }),
     loadIntoLocation: (index, toneprintId) => {
       loadIntoLocationAsync(index, toneprintId).catch(report);
     },
-    openDetails: (target) => dispatch({ type: 'openDetails', target }),
-    closeDetails: () => dispatch({ type: 'closeDetails' }),
-    replaceInBackup: (index, toneprintId) => {
-      const { library, toneprints } = stateRef.current;
-      const toneprint = toneprints[toneprintId];
-      if (!library || !toneprint || !library.presets[index]) return;
-      const presets = [...library.presets];
-      presets[index] = presetFromToneprint(toneprint);
-      dispatch({ type: 'libraryChanged', presets });
-      dispatch({ type: 'select', index });
+    swapOnPedal: (from, to) => {
+      swapOnPedalAsync(from, to).catch(report);
     },
-    findFactoryPresets: () => {
-      findFactoryAsync().catch(report);
+    renameOnPedal: (index, name) => {
+      renameOnPedalAsync(index, name).catch(report);
+    },
+    readPresetNames: () => {
+      if (link.current) readNames(link.current, true).catch(report);
     },
     forgetPresets: () => {
       clearToneprintCache();
       dispatch({ type: 'forgetToneprints' });
     },
-    writeBackupToPedal: () => {
-      writeBackupAsync().catch(report);
+    backUpPedal: () => {
+      backUpPedalAsync().catch(report);
+    },
+    openBackup: (file) => {
+      openBackupAsync(file).catch(report);
+    },
+    closeBackup: () => dispatch({ type: 'backupClosed' }),
+    restoreBackup: () => {
+      restoreBackupAsync().catch(report);
     },
     clearTraffic: () => dispatch({ type: 'clearTraffic' }),
     dismissNotice: () => dispatch({ type: 'notice', notice: null }),
   }), [
-    connectAsync, disconnect, enableMidiAsync, findFactoryAsync, loadIntoLocationAsync,
-    openBackupAsync, readNames, report, saveBackupAsync, writeBackupAsync,
+    backUpPedalAsync, connectAsync, disconnect, enableMidiAsync, loadIntoLocationAsync,
+    openBackupAsync, readNames, renameOnPedalAsync, report, restoreBackupAsync, swapOnPedalAsync,
   ]);
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

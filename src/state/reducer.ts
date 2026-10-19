@@ -21,13 +21,11 @@ export const initialState: AppState = {
   current: null,
   liveDelayMs: null,
   lastPing: null,
-  library: null,
-  source: 'pedal',
+  backupFile: null,
   selectedIndex: 0,
   details: null,
   traffic: [],
   midiChannel: 1,
-  experimental: false,
   busy: null,
   notice: null,
 };
@@ -89,7 +87,6 @@ export function reducer(state: AppState, action: Action): AppState {
           current: null,
           liveDelayMs: null,
           lastPing: null,
-          source: state.library ? 'library' : 'pedal',
         };
       }
       return { ...state, link: action.mode };
@@ -122,24 +119,10 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, toneprints: {} };
     case 'push':
       return applyPush(state, action.push);
-    case 'libraryLoaded':
-      return {
-        ...state,
-        library: action.library,
-        source: state.link === 'librarian' ? state.source : 'library',
-      };
-    case 'libraryChanged':
-      return state.library
-        ? { ...state, library: { ...state.library, presets: action.presets, modified: true } }
-        : state;
-    case 'librarySaved':
-      return state.library
-        ? { ...state, library: { ...state.library, modified: false, checksumValid: true } }
-        : state;
-    case 'libraryClosed':
-      return { ...state, library: null, source: 'pedal' };
-    case 'setSource':
-      return { ...state, source: action.source };
+    case 'backupOpened':
+      return { ...state, backupFile: action.file };
+    case 'backupClosed':
+      return { ...state, backupFile: null };
     case 'select':
       return { ...state, selectedIndex: action.index };
     case 'traffic':
@@ -148,8 +131,6 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, traffic: [] };
     case 'setChannel':
       return { ...state, midiChannel: action.channel };
-    case 'setExperimental':
-      return { ...state, experimental: action.enabled };
     case 'busy':
       return { ...state, busy: action.label };
     case 'notice':

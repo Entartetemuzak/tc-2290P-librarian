@@ -7,13 +7,12 @@ import type { PresetSlot } from '../state/presets';
 interface Props {
   toneprint: Toneprint;
   slots: PresetSlot[];
-  /** null when the preset cannot be placed in the current view. */
-  placeTarget: 'pedal' | 'file' | null;
+  canPlace: boolean;
   onPlace: (index: number) => void;
 }
 
 export default function LibraryDetails({
-  toneprint, slots, placeTarget, onPlace,
+  toneprint, slots, canPlace, onPlace,
 }: Props) {
   const placeId = useId();
   const [target, setTarget] = useState('');
@@ -28,10 +27,10 @@ export default function LibraryDetails({
         <p className="display__meta">{`${kind} · TonePrint ${toneprint.id}`}</p>
       </div>
 
-      {placeTarget && (
+      {canPlace && (
         <div className="modal__actions">
           <label className="field" htmlFor={placeId}>
-            {placeTarget === 'pedal' ? 'Put on a pedal location' : 'Put on a location in the file'}
+            Put on a pedal location
             <select
               id={placeId}
               value={target}
@@ -69,11 +68,7 @@ export default function LibraryDetails({
                 type="button"
                 className="button button--primary"
                 disabled={!targetSlot}
-                onClick={() => {
-                  if (!targetSlot) return;
-                  if (placeTarget === 'pedal') setConfirming(true);
-                  else onPlace(targetSlot.index);
-                }}
+                onClick={() => setConfirming(true)}
               >
                 Put on location
               </button>

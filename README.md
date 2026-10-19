@@ -13,33 +13,24 @@ computer.
 
 | Area | Over USB (SysEx) | Over 5-pin MIDI |
 | --- | --- | --- |
-| Show the 128 preset locations (boards 1–64, presets A/B) with names | Yes | – |
-| Show every preset's parameters | Yes | – |
+| Show the 128 preset locations (boards 1–64, presets A/B) with names and parameters | Yes | – |
 | Load a preset by clicking it | Yes | Yes, with Program Change (default map) |
-| Live control of every parameter with MIDI CC | Yes | Yes |
-| Exact delay time (CC 60–64) | Yes | Yes |
-| Live delay time reported by the pedal | Yes | – |
+| Swap two locations by dragging one onto the other | Yes | – |
+| Rename a preset, or put another preset on a location | Yes | – |
+| Library of every preset seen (factory, user, from backup files), with search and drag to a location | Yes | Browse only |
+| Back up the pedal to a .tc2290B file | Yes | – |
+| Restore a .tc2290B file, with a preview of every location that changes | Yes | – |
+| Live control of every parameter with MIDI CC, starting from the active preset's values | Yes | Yes |
 | Read MIDI setup and pedal settings | Yes | – |
-| Open, rename, rearrange and save backup files (.tc2290B) | Works offline | Works offline |
 | SysEx monitor with decoding | Yes | MIDI messages only |
-| Library of remembered presets: factory, user and from backup files, with search | Yes | Works offline |
-| Drag a library preset onto a location in a backup file | Works offline | Works offline |
-| Drag a library preset onto a location on the pedal (experimental) | Yes | – |
-| Ask the pedal for every stored factory preset (experimental) | Yes | – |
-| Write a backup to the pedal (experimental) | Yes | – |
 
-The library contains no factory content of its own. It is built from your pedal and your
-backup files: presets the pedal reports with the factory artist ID are listed as factory
-presets, presets stored on the pedal as user presets, and presets known only from a backup file
-as such until the pedal reports them.
+Backup files use the official app's format, so either app can restore them. The library
+contains no factory content of its own: it is built from your pedal and from backup files you
+open, and kept in the browser's local storage. Presets the pedal reports with the factory
+artist ID are listed as factory presets, presets stored on the pedal as user presets.
 
-Preset names and parameters are read from the pedal when you connect, one preset at a time,
-the same way the official app does, and are remembered in the browser's local storage so they
-appear at once next time. Opening a backup file adds its presets too. Nothing is sent anywhere.
-
-Backup files saved here carry a valid checksum, so the official app's **Restore Backup**
-accepts them. Renamed presets get a new TonePrint ID, so a restore uploads them instead of
-keeping the old version on the pedal.
+Renaming works like STORE on the pedal: the renamed preset is stored as a new TonePrint on the
+same location.
 
 ## Browser support
 
@@ -103,7 +94,7 @@ src/
   midi/       Web MIDI access and DeviceLink (request/response, acknowledgements).
   state/      App state (reducer + context) and the provider that owns the MIDI link.
   components/ Shared UI parts.
-  views/      Presets, Live control, Backup files, MIDI setup, Pedal settings, SysEx monitor.
+  views/      Presets, Live control, Backups, MIDI setup, Pedal settings, SysEx monitor.
   styles/     The CSS design system.
 ```
 
@@ -118,9 +109,10 @@ encoders byte for byte against messages captured from the official app.
 
 ## Safety
 
-Read-only functions and live control are safe. Writing to the pedal (preset selection is the
-only write that is always on; the rest is behind *Enable experimental functions*) changes its
-contents. Take a backup with the official app before you write anything.
+Reading, loading presets and live control change nothing that is stored. Swapping and renaming
+keep every preset. Putting a preset on a location and restoring a backup replace what is
+stored, so both ask for confirmation first, and the restore preview lists every location that
+changes. Save the pedal to a file before larger changes.
 
 ## License
 

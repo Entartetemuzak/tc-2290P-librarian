@@ -6,7 +6,7 @@ import { type MessageHeader, isResponse, readHeader } from '../protocol/header';
 import {
   buildAcknowledgement, buildAssignmentsRead, buildAssignmentsUpdate, buildCcMapRead,
   buildPcMapRead, buildSelectPreset, buildSettingsRead, buildToneprintCreate,
-  buildToneprintRead, buildToneprintSearch, buildVersionRequest, isAcknowledgedPush,
+  buildToneprintRead, buildVersionRequest, isAcknowledgedPush,
 } from '../protocol/messages';
 import {
   type MidiCcMapping, type MidiPcMapping, type PresetAssignment, type SettingsGroup,
@@ -125,16 +125,6 @@ export default class DeviceLink {
       Command.TONEPRINT_READ_RESPONSE,
     );
     return r.vector(readToneprint)[0] ?? null;
-  }
-
-  /** Experimental: all TonePrints whose field equals the value, e.g. artistId = 1210. */
-  async findToneprints(field: string, value: string): Promise<Toneprint[]> {
-    const r = await this.request(
-      (s) => buildToneprintSearch(s, field, value),
-      Command.TONEPRINT_READ_RESPONSE,
-      10000,
-    );
-    return r.vector(readToneprint);
   }
 
   async selectPreset(board: number, slot: number): Promise<void> {
