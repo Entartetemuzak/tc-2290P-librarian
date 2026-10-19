@@ -13,15 +13,29 @@ computer.
 
 | Area | Over USB (SysEx) | Over 5-pin MIDI |
 | --- | --- | --- |
-| Show the 128 preset locations (boards 1–64, presets A/B) | Yes | – |
-| Recall a preset | Yes | Yes, with Program Change (default map) |
+| Show the 128 preset locations (boards 1–64, presets A/B) with names | Yes | – |
+| Show every preset's parameters | Yes | – |
+| Load a preset by clicking it | Yes | Yes, with Program Change (default map) |
 | Live control of every parameter with MIDI CC | Yes | Yes |
 | Exact delay time (CC 60–64) | Yes | Yes |
 | Live delay time reported by the pedal | Yes | – |
 | Read MIDI setup and pedal settings | Yes | – |
 | Open, rename, rearrange and save backup files (.tc2290B) | Works offline | Works offline |
 | SysEx monitor with decoding | Yes | MIDI messages only |
+| Library of remembered presets: factory, user and from backup files, with search | Yes | Works offline |
+| Drag a library preset onto a location in a backup file | Works offline | Works offline |
+| Drag a library preset onto a location on the pedal (experimental) | Yes | – |
+| Ask the pedal for every stored factory preset (experimental) | Yes | – |
 | Write a backup to the pedal (experimental) | Yes | – |
+
+The library contains no factory content of its own. It is built from your pedal and your
+backup files: presets the pedal reports with the factory artist ID are listed as factory
+presets, presets stored on the pedal as user presets, and presets known only from a backup file
+as such until the pedal reports them.
+
+Preset names and parameters are read from the pedal when you connect, one preset at a time,
+the same way the official app does, and are remembered in the browser's local storage so they
+appear at once next time. Opening a backup file adds its presets too. Nothing is sent anywhere.
 
 Backup files saved here carry a valid checksum, so the official app's **Restore Backup**
 accepts them. Renamed presets get a new TonePrint ID, so a restore uploads them instead of

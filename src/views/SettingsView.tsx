@@ -1,5 +1,14 @@
 import Section from '../components/Section';
 import { useApp } from '../state/context';
+import { displayValue, settingLabel } from '../state/settingLabels';
+
+const GROUP_TITLES: Record<string, string> = {
+  ProductSettings: 'Product settings',
+  ProductInfo: 'Product information',
+  MidiSettings: 'MIDI settings',
+  SystemState: 'Current state',
+  HardwareStatus: 'Hardware status',
+};
 
 export default function SettingsView() {
   const { state } = useApp();
@@ -10,8 +19,8 @@ export default function SettingsView() {
         <div>
           <h2>Pedal settings</h2>
           <p>
-            Every settings group the pedal reports, read only. Values with a list of allowed
-            values show their label.
+            Everything the pedal reports about its settings and state, read only. Change settings
+            in the official app.
           </p>
         </div>
       </div>
@@ -20,26 +29,24 @@ export default function SettingsView() {
           <p className="empty">Connect to the pedal over USB to read its settings.</p>
         </Section>
       ) : state.settings.map((group) => (
-        <Section key={group.name} title={group.name}>
+        <Section key={group.name} title={GROUP_TITLES[group.name] ?? group.name}>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Key</th>
+                  <th>Setting</th>
                   <th>Value</th>
                   <th>Unit</th>
-                  <th>Description</th>
+                  <th>Key</th>
                 </tr>
               </thead>
               <tbody>
                 {group.settings.map((s) => (
                   <tr key={s.key}>
-                    <td>{s.key}</td>
-                    <td className="mono">
-                      {s.allowedValues.find((a) => a.value === s.value)?.name ?? s.value}
-                    </td>
+                    <td>{settingLabel(s)}</td>
+                    <td className="mono">{displayValue(s)}</td>
                     <td>{s.unit === 'N/A' ? '' : s.unit}</td>
-                    <td>{s.descriptionShort}</td>
+                    <td className="mono muted">{s.key}</td>
                   </tr>
                 ))}
               </tbody>

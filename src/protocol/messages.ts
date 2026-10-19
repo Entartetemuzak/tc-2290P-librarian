@@ -7,7 +7,7 @@ import { writeHeader } from './header';
 import {
   type PresetAssignment, type Toneprint, writeAssignment, writeSettingsGroup, writeToneprint,
 } from './model';
-import { Table, writeQuery } from './query';
+import { type Query, Table, writeQuery } from './query';
 
 const protocolMessage = (writer: ByteWriter): number[] => (
   buildSysEx(SYSEX_COMMAND_PROTOCOL, writer.bytes)
@@ -26,34 +26,71 @@ export function buildKeepAlive(): number[] {
 
 type ReadParameter = 'uint' | 'optional';
 
-/** A CRUD read request with an empty query, as the vendor app sends during its initial dump. */
+/** A CRUD read request: the query, then a parameter (uint 0 or an empty Optional). */
 export function buildReadRequest(
   commandId: number,
-  table: string,
+  query: Query,
   sessionId: number,
   parameter: ReadParameter = 'uint',
 ): number[] {
   const w = writeHeader(new ByteWriter(), commandId, sessionId);
-  writeQuery(w, { table });
+  writeQuery(w, query);
   if (parameter === 'uint') w.uint(0);
   else w.optional(null, () => undefined);
   return protocolMessage(w);
 }
 
-export const buildSettingsRead = (sessionId: number): number[] => (
-  buildReadRequest(Command.SETTINGS_READ, Table.SETTINGS_GROUP, sessionId)
+const equals = (field: string, value: string) => ({ op: 0, field, value });
+
+/*
+ * The read requests below repeat the queries in the vendor app's product
+ * definition. The pedal answers incompletely without the where/include parts.
+ */
+
+export const buildSettingsRead = (sessionId: number): number[] => buildReadRequest(
+  Command.SETTINGS_READ,
+  {
+    table: Table.SETTINGS_GROUP,
+    where: [equals('name', '')],
+    include: [{ table: Table.SETTING }],
+  },
+  sessionId,
 );
+
 export const buildAssignmentsRead = (sessionId: number): number[] => (
-  buildReadRequest(Command.ASSIGNED_READ, Table.ASSIGNED_TONEPRINT, sessionId)
+  buildReadRequest(Command.ASSIGNED_READ, { table: Table.ASSIGNED_TONEPRINT }, sessionId)
 );
-export const buildPcMapRead = (sessionId: number): number[] => (
-  buildReadRequest(Command.MIDI_PC_READ, Table.MIDI_PC_MAPPING, sessionId)
+
+/** @param direction 0 or 1; the vendor app reads both. */
+export const buildPcMapRead = (sessionId: number, direction: number): number[] => buildReadRequest(
+  Command.MIDI_PC_READ,
+  { table: Table.MIDI_PC_MAPPING, where: [equals('direction', String(direction))] },
+  sessionId,
 );
+
 export const buildCcMapRead = (sessionId: number): number[] => (
-  buildReadRequest(Command.MIDI_CC_READ, Table.MIDI_CC_MAPPING, sessionId)
+  buildReadRequest(Command.MIDI_CC_READ, { table: Table.MIDI_CC_MAPPING }, sessionId)
 );
-export const buildToneprintRead = (sessionId: number): number[] => (
-  buildReadRequest(Command.TONEPRINT_READ, Table.TONEPRINT, sessionId, 'optional')
+
+/** Reads TonePrints (name and parameter data) whose field equals a value. */
+export const buildToneprintSearch = (
+  sessionId: number,
+  field: string,
+  value: string,
+): number[] => buildReadRequest(
+  Command.TONEPRINT_READ,
+  {
+    table: Table.TONEPRINT,
+    where: [equals(field, value)],
+    include: [{ table: Table.TONEPRINT_DATA }, { table: Table.ARTIST }],
+  },
+  sessionId,
+  'optional',
+);
+
+/** Reads one TonePrint by its ID, as the vendor app does. */
+export const buildToneprintRead = (sessionId: number, toneprintId: string): number[] => (
+  buildToneprintSearch(sessionId, 'tpId', toneprintId)
 );
 
 /**

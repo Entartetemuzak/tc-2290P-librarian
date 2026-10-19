@@ -17,6 +17,10 @@ export const APP_SENDER_ID = 0;
 export const PEDAL_SENDER_ID = 10;
 export const PROTOCOL_VERSION = 6;
 
+/** artistId the pedal reports for factory presets; presets stored on the pedal carry "local". */
+export const FACTORY_ARTIST_ID = '1210';
+export const LOCAL_ARTIST_ID = 'local';
+
 /** Effect ID of the 2290 delay algorithm, as reported by the pedal. */
 export const EFFECT_ID_2290 = 48012;
 

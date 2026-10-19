@@ -6,14 +6,16 @@ import {
   describeAccessError, findPedalPort, isWebMidiSupported, listPorts, requestMidiAccess,
 } from '../midi/webMidi';
 import {
-  type LibraryPreset, parseBackup, renamePreset as renameLibraryPreset, serializeBackup,
+  type LibraryPreset, parseBackup, presetFromToneprint, renamePreset as renameLibraryPreset,
+  serializeBackup,
 } from '../protocol/backup';
 import { delayTimeDigits } from '../protocol/ccMap';
-import { EFFECT_ID_2290 } from '../protocol/constants';
-import type { PresetAssignment } from '../protocol/model';
+import { EFFECT_ID_2290, FACTORY_ARTIST_ID } from '../protocol/constants';
+import type { PresetAssignment, Toneprint } from '../protocol/model';
 import downloadText from '../utils/download';
 import { type AppActions, AppContext } from './context';
 import { boardOf } from './presets';
+import { clearToneprintCache, loadToneprintCache, saveToneprintCache } from './toneprintCache';
 import { initialState, reducer } from './reducer';
 import type { AppState, PresetSource, ViewId } from './types';
 
@@ -34,6 +36,7 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState, (init): AppState => ({
     ...init,
     midiStatus: isWebMidiSupported() ? 'idle' : 'unsupported',
+    toneprints: loadToneprintCache(),
   }));
   const access = useRef<MIDIAccess | null>(null);
   const link = useRef<DeviceLink | null>(null);
@@ -71,6 +74,46 @@ export default function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => link.current?.dispose(), []);
 
+  useEffect(() => {
+    saveToneprintCache(state.toneprints);
+  }, [state.toneprints]);
+
+  /**
+   * Reads name and parameters for every assigned TonePrint, one request per ID,
+   * the way the vendor app does. Already known TonePrints are skipped unless forced.
+   */
+  const readNames = useCallback(async (device: DeviceLink, force: boolean) => {
+    const known = stateRef.current.toneprints;
+    const ids = [...new Set(stateRef.current.assignments
+      .filter((a) => a.group === 0 && a.toneprintId)
+      .map((a) => a.toneprintId))]
+      .filter((id) => force || !known[id]);
+    let found = 0;
+    let batch: Toneprint[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = ids[i] ?? '';
+      dispatch({ type: 'busy', label: `Reading presets: ${i + 1} of ${ids.length}` });
+      // One request at a time keeps the pedal's queue short and the order predictable.
+      // eslint-disable-next-line no-await-in-loop
+      const toneprint = await device.readToneprint(id);
+      if (toneprint) {
+        found += 1;
+        batch.push(toneprint);
+      }
+      if (i === 2 && found === 0) {
+        dispatch({ type: 'busy', label: null });
+        notify('error', 'The pedal returned no preset data. Open a backup file to see names.');
+        return;
+      }
+      if (batch.length >= 8 || i === ids.length - 1) {
+        dispatch({ type: 'toneprints', toneprints: batch });
+        batch = [];
+      }
+    }
+    dispatch({ type: 'busy', label: null });
+    if (force) notify('info', `Read ${found} of ${ids.length} presets from the pedal.`);
+  }, [notify]);
+
   const connectAsync = useCallback(async () => {
     const midi = access.current;
     const { inputId, outputId } = stateRef.current;
@@ -97,8 +140,9 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'pedalData', data: { version } });
     dispatch({ type: 'busy', label: 'Reading the pedal' });
     const assignments = await device.readAssignments();
+    dispatch({ type: 'pedalData', data: { assignments } });
     const settings = await device.readSettings();
-    dispatch({ type: 'pedalData', data: { assignments, settings } });
+    dispatch({ type: 'pedalData', data: { settings } });
     const current = currentFromSettings(settings);
     if (current) dispatch({ type: 'push', push: { kind: 'presetSelected', ...current } });
     const pcMap = await device.readPcMap();
@@ -106,7 +150,9 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'pedalData', data: { pcMap, ccMap } });
     dispatch({ type: 'setSource', source: 'pedal' });
     dispatch({ type: 'busy', label: null });
-  }, [notify]);
+    stateRef.current = { ...stateRef.current, assignments };
+    await readNames(device, false);
+  }, [notify, readNames]);
 
   const enableMidiAsync = useCallback(async () => {
     dispatch({ type: 'midiStatus', status: 'requesting' });
@@ -123,6 +169,12 @@ export default function AppProvider({ children }: { children: ReactNode }) {
 
   const openBackupAsync = useCallback(async (file: File) => {
     const doc = await parseBackup(await file.text());
+    dispatch({
+      type: 'toneprints',
+      toneprints: doc.presets.map((p) => ({
+        id: p.id, name: p.name, data: p.data, artistId: '', effectId: EFFECT_ID_2290,
+      })),
+    });
     dispatch({
       type: 'libraryLoaded',
       library: {
@@ -150,14 +202,44 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     notify('info', 'Backup file saved. Restore it with the 2290 P app or Write to pedal.');
   }, [notify]);
 
-  const readToneprintsAsync = useCallback(async () => {
+  const loadIntoLocationAsync = useCallback(async (index: number, toneprintId: string) => {
+    const device = link.current;
+    const { toneprints, assignments } = stateRef.current;
+    const toneprint = toneprints[toneprintId];
+    if (!device || !toneprint) return;
+    const board = boardOf(index);
+    const slot = index % 2;
+    if (!assignments.some((a) => a.toneprintId === toneprintId)) {
+      dispatch({ type: 'busy', label: `Uploading ${toneprint.name}` });
+      await device.uploadToneprint({
+        ...toneprint,
+        artistId: toneprint.artistId || 'local',
+        effectId: toneprint.effectId || EFFECT_ID_2290,
+      });
+    }
+    dispatch({ type: 'busy', label: 'Writing the preset location' });
+    const assignment: PresetAssignment = {
+      group: 0, board, slot, toneprintId,
+    };
+    await device.writeAssignments([assignment]);
+    dispatch({ type: 'push', push: { kind: 'assignmentsChanged', assignments: [assignment] } });
+    dispatch({ type: 'busy', label: null });
+    notify('info', `${toneprint.name} is now on preset ${board}${slot === 0 ? 'A' : 'B'}.`);
+  }, [notify]);
+
+  const findFactoryAsync = useCallback(async () => {
     const device = link.current;
     if (!device) return;
-    dispatch({ type: 'busy', label: 'Reading TonePrints' });
-    const toneprints = await device.readToneprints();
-    dispatch({ type: 'toneprints', toneprints });
+    dispatch({ type: 'busy', label: 'Asking the pedal for factory presets' });
+    const found = await device.findToneprints('artistId', FACTORY_ARTIST_ID);
+    dispatch({ type: 'toneprints', toneprints: found });
     dispatch({ type: 'busy', label: null });
-    notify('info', `Read ${toneprints.length} TonePrints from the pedal.`);
+    notify(
+      found.length > 0 ? 'info' : 'error',
+      found.length > 0
+        ? `The pedal returned ${found.length} factory presets.`
+        : 'The pedal returned no factory presets for this query.',
+    );
   }, [notify]);
 
   const writeBackupAsync = useCallback(async () => {
@@ -214,6 +296,10 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       } else {
         // Default Program Change map: program n recalls preset n (0 = 1A, 1 = 1B …).
         device.sendProgramChange(stateRef.current.midiChannel, index);
+        dispatch({
+          type: 'push',
+          push: { kind: 'presetSelected', board: boardOf(index), slot: index % 2 },
+        });
       }
     },
     sendControl: (controller, value) => {
@@ -235,8 +321,13 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       const preset = library?.presets[index];
       if (!library || !preset || preset.name === name) return;
       const presets = [...library.presets];
-      presets[index] = renameLibraryPreset(preset, name);
+      const renamed = renameLibraryPreset(preset, name);
+      presets[index] = renamed;
       dispatch({ type: 'libraryChanged', presets });
+      dispatch({
+        type: 'toneprints',
+        toneprints: [{ ...renamed, artistId: 'local', effectId: EFFECT_ID_2290 }],
+      });
     },
     swapPresets: (from, to) => {
       const { library } = stateRef.current;
@@ -253,8 +344,29 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       saveBackupAsync().catch(report);
     },
     setExperimental: (enabled) => dispatch({ type: 'setExperimental', enabled }),
-    readToneprints: () => {
-      readToneprintsAsync().catch(report);
+    readPresetNames: () => {
+      if (link.current) readNames(link.current, true).catch(report);
+    },
+    loadIntoLocation: (index, toneprintId) => {
+      loadIntoLocationAsync(index, toneprintId).catch(report);
+    },
+    openDetails: (target) => dispatch({ type: 'openDetails', target }),
+    closeDetails: () => dispatch({ type: 'closeDetails' }),
+    replaceInBackup: (index, toneprintId) => {
+      const { library, toneprints } = stateRef.current;
+      const toneprint = toneprints[toneprintId];
+      if (!library || !toneprint || !library.presets[index]) return;
+      const presets = [...library.presets];
+      presets[index] = presetFromToneprint(toneprint);
+      dispatch({ type: 'libraryChanged', presets });
+      dispatch({ type: 'select', index });
+    },
+    findFactoryPresets: () => {
+      findFactoryAsync().catch(report);
+    },
+    forgetPresets: () => {
+      clearToneprintCache();
+      dispatch({ type: 'forgetToneprints' });
     },
     writeBackupToPedal: () => {
       writeBackupAsync().catch(report);
@@ -262,8 +374,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     clearTraffic: () => dispatch({ type: 'clearTraffic' }),
     dismissNotice: () => dispatch({ type: 'notice', notice: null }),
   }), [
-    connectAsync, disconnect, enableMidiAsync, openBackupAsync, readToneprintsAsync, report,
-    saveBackupAsync, writeBackupAsync,
+    connectAsync, disconnect, enableMidiAsync, findFactoryAsync, loadIntoLocationAsync,
+    openBackupAsync, readNames, report, saveBackupAsync, writeBackupAsync,
   ]);
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
-import type { AppState, PresetSource, ViewId } from './types';
+import type {
+  AppState, DetailsTarget, PresetSource, ViewId,
+} from './types';
 
 export interface AppActions {
   setView: (view: ViewId) => void;
@@ -19,7 +21,13 @@ export interface AppActions {
   swapPresets: (from: number, to: number) => void;
   saveBackup: () => void;
   setExperimental: (enabled: boolean) => void;
-  readToneprints: () => void;
+  readPresetNames: () => void;
+  loadIntoLocation: (index: number, toneprintId: string) => void;
+  forgetPresets: () => void;
+  openDetails: (target: DetailsTarget) => void;
+  closeDetails: () => void;
+  replaceInBackup: (index: number, toneprintId: string) => void;
+  findFactoryPresets: () => void;
   writeBackupToPedal: () => void;
   clearTraffic: () => void;
   dismissNotice: () => void;

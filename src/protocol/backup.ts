@@ -121,15 +121,36 @@ export function newToneprintId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+const cleanName = (name: string): string => (
+  name.replace(/[^\x20-\x7e]/g, '').slice(0, MAX_NAME_LENGTH)
+);
+
+/** Writes the name into data words 0–5 the way backup files store it (0, then 20 name bytes). */
+export function withNameHeader(data: readonly number[], name: string): number[] {
+  const clean = cleanName(name);
+  const view = new DataView(new ArrayBuffer(NAME_BYTES));
+  for (let i = 0; i < clean.length; i += 1) view.setUint8(i, clean.charCodeAt(i));
+  const result = [...data];
+  result[0] = 0;
+  for (let w = 0; w < NAME_BYTES / 4; w += 1) result[1 + w] = view.getInt32(w * 4, false);
+  return result;
+}
+
 /**
  * Renames a preset. The name is stored twice: in the backup entry and in data
  * words 1–5 (20 bytes, null-terminated). The preset gets a new ID.
  */
 export function renamePreset(preset: LibraryPreset, name: string): LibraryPreset {
-  const clean = name.replace(/[^\x20-\x7e]/g, '').slice(0, MAX_NAME_LENGTH);
-  const view = new DataView(new ArrayBuffer(NAME_BYTES));
-  for (let i = 0; i < clean.length; i += 1) view.setUint8(i, clean.charCodeAt(i));
-  const data = [...preset.data];
-  for (let w = 0; w < NAME_BYTES / 4; w += 1) data[1 + w] = view.getInt32(w * 4, false);
-  return { name: clean, id: newToneprintId(), data };
+  const clean = cleanName(name);
+  return { name: clean, id: newToneprintId(), data: withNameHeader(preset.data, clean) };
+}
+
+/** A backup entry for a TonePrint read from the pedal, keeping its ID. */
+export function presetFromToneprint(toneprint: { id: string; name: string; data: number[] }):
+LibraryPreset {
+  return {
+    name: toneprint.name,
+    id: toneprint.id,
+    data: withNameHeader(toneprint.data, toneprint.name),
+  };
 }

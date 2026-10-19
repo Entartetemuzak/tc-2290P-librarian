@@ -2,16 +2,17 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import ByteReader from './ByteReader';
 import ByteWriter from './ByteWriter';
-import { delayTimeDigits } from './ccMap';
+import { CONTROLS, delayTimeDigits } from './ccMap';
 import { decodeMessage } from './decode';
 import { extractSysExFromText, parseSysEx, toHex } from './frame';
 import {
-  buildAcknowledgement, buildAssignmentsUpdate, buildSelectPreset, buildVersionRequest,
+  buildAcknowledgement, buildAssignmentsUpdate, buildPcMapRead, buildSelectPreset,
+  buildSettingsRead, buildToneprintRead, buildToneprintSearch, buildVersionRequest,
 } from './messages';
 import { pack7, unpack7 } from './packing';
 import { describeParameters } from './params';
 import {
-  parseBackup, renamePreset, serializeBackup,
+  parseBackup, presetFromToneprint, renamePreset, serializeBackup,
 } from './backup';
 
 const hex = (text: string): number[] => text.split(' ').map((h) => Number.parseInt(h, 16));
@@ -87,6 +88,47 @@ describe('messages', () => {
   });
 });
 
+describe('read requests match the vendor app queries', () => {
+  it('reads settings with where name = "" and include setting', () => {
+    expect(decodeMessage(buildSettingsRead(7))?.body).toEqual({
+      query: {
+        table: 'settingsGroup',
+        where: [{ op: 0, field: 'name', value: '' }],
+        include: [{
+          table: 'setting', where: [], include: [], listA: [], listB: [],
+        }],
+        listA: [],
+        listB: [],
+      },
+      parameter: 0,
+    });
+  });
+
+  it('reads the Program Change map one direction at a time', () => {
+    const body = decodeMessage(buildPcMapRead(8, 1))?.body as { query: { where: unknown[] } };
+    expect(body.query.where).toEqual([{ op: 0, field: 'direction', value: '1' }]);
+  });
+
+  it('asks for every factory preset by artistId', () => {
+    const body = decodeMessage(buildToneprintSearch(3, 'artistId', '1210'))?.body as {
+      query: { where: unknown[] };
+    };
+    expect(body.query.where).toEqual([{ op: 0, field: 'artistId', value: '1210' }]);
+  });
+
+  it('reads one TonePrint by ID with its data and artist', () => {
+    const id = '0123456789abcdef0123456789abcdef';
+    const body = decodeMessage(buildToneprintRead(9, id))?.body as {
+      query: { table: string; where: unknown[]; include: { table: string }[] };
+      parameter: unknown;
+    };
+    expect(body.query.table).toBe('toneprint');
+    expect(body.query.where).toEqual([{ op: 0, field: 'tpId', value: id }]);
+    expect(body.query.include.map((q) => q.table)).toEqual(['tpData', 'artist']);
+    expect(body.parameter).toBeNull();
+  });
+});
+
 describe('decoding', () => {
   it('decodes the version response', () => {
     const decoded = decodeMessage(hex(CAPTURED.versionResponse));
@@ -152,12 +194,35 @@ describe('backup files', () => {
     expect(again.presets[0]?.name).toBe('My new name');
   });
 
+  it('stores a preset read from the pedal with its name and ID', async () => {
+    const doc = await parseBackup(fixture);
+    const pedalData = [-1, -1, -1, -1, -1, -1, ...(doc.presets[5]?.data.slice(6) ?? [])];
+    const id = 'abcdef0123456789abcdef0123456789';
+    const entry = presetFromToneprint({ id, name: 'FROM PEDAL', data: pedalData });
+    const again = await parseBackup(await serializeBackup([entry, ...doc.presets.slice(1)]));
+    expect(again.presets[0]).toMatchObject({ name: 'FROM PEDAL', id });
+    expect(again.presets[0]?.data.slice(6)).toEqual(doc.presets[5]?.data.slice(6));
+  });
+
   it('rejects files that are not backups', async () => {
     await expect(parseBackup('{"hello":1}')).rejects.toThrow(/preset list/);
   });
 });
 
 describe('MIDI CC helpers', () => {
+  it('starts live controls at the stored preset values', async () => {
+    const fixtureUrl = new URL('./__fixtures__/synthetic.tc2290B', import.meta.url);
+    const data = (await parseBackup(readFileSync(fixtureUrl, 'utf8'))).presets[2]?.data ?? [];
+    const cc = (n: number): number | undefined => (
+      CONTROLS.find((c) => c.cc === n)?.fromPreset?.(data)
+    );
+    expect(cc(40)).toBe(3); // feedback 2 of 99
+    expect(cc(11)).toBe(12); // delay mod speed 1.02 Hz
+    expect(cc(13)).toBe(9); // delay mod threshold 10
+    expect(cc(16)).toBe(1); // delay mod on, deep off
+    expect(cc(50)).toBe(0); // sync off
+  });
+
   it('splits a delay time into the five digit controllers', () => {
     expect(delayTimeDigits(1234.5)).toEqual([
       { cc: 64, value: 1 }, { cc: 63, value: 2 }, { cc: 62, value: 3 },

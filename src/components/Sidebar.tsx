@@ -6,7 +6,7 @@ export default function Sidebar() {
     <aside className="ear">
       <header className="brand">
         <h1 className="brand__name">Delay Librarian</h1>
-        <p className="brand__tagline">Unofficial web librarian for the 2290 P</p>
+        <p className="brand__tagline">Unofficial 2290 P web librarian</p>
       </header>
       <ConnectionPanel />
       <Navigation />

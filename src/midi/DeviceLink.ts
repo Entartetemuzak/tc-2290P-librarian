@@ -5,8 +5,8 @@ import { parseSysEx } from '../protocol/frame';
 import { type MessageHeader, isResponse, readHeader } from '../protocol/header';
 import {
   buildAcknowledgement, buildAssignmentsRead, buildAssignmentsUpdate, buildCcMapRead,
-  buildPcMapRead, buildSelectPreset, buildSettingsRead, buildToneprintCreate, buildToneprintRead,
-  buildVersionRequest, isAcknowledgedPush,
+  buildPcMapRead, buildSelectPreset, buildSettingsRead, buildToneprintCreate,
+  buildToneprintRead, buildToneprintSearch, buildVersionRequest, isAcknowledgedPush,
 } from '../protocol/messages';
 import {
   type MidiCcMapping, type MidiPcMapping, type PresetAssignment, type SettingsGroup,
@@ -105,9 +105,12 @@ export default class DeviceLink {
     return r.vector(readAssignment);
   }
 
+  /** Reads the Program Change map in both directions, as the vendor app does. */
   async readPcMap(): Promise<MidiPcMapping[]> {
-    const r = await this.request(buildPcMapRead, Command.MIDI_PC_READ_RESPONSE);
-    return r.vector(readPcMapping);
+    const first = await this.request((s) => buildPcMapRead(s, 0), Command.MIDI_PC_READ_RESPONSE);
+    const mappings = first.vector(readPcMapping);
+    const second = await this.request((s) => buildPcMapRead(s, 1), Command.MIDI_PC_READ_RESPONSE);
+    return [...mappings, ...second.vector(readPcMapping)];
   }
 
   async readCcMap(): Promise<MidiCcMapping[]> {
@@ -115,9 +118,22 @@ export default class DeviceLink {
     return r.vector(readCcMapping);
   }
 
-  /** Not used by the vendor app; experimental. */
-  async readToneprints(): Promise<Toneprint[]> {
-    const r = await this.request(buildToneprintRead, Command.TONEPRINT_READ_RESPONSE, 8000);
+  /** Reads one TonePrint (name and parameters); null if the pedal does not have it. */
+  async readToneprint(toneprintId: string): Promise<Toneprint | null> {
+    const r = await this.request(
+      (s) => buildToneprintRead(s, toneprintId),
+      Command.TONEPRINT_READ_RESPONSE,
+    );
+    return r.vector(readToneprint)[0] ?? null;
+  }
+
+  /** Experimental: all TonePrints whose field equals the value, e.g. artistId = 1210. */
+  async findToneprints(field: string, value: string): Promise<Toneprint[]> {
+    const r = await this.request(
+      (s) => buildToneprintSearch(s, field, value),
+      Command.TONEPRINT_READ_RESPONSE,
+      10000,
+    );
     return r.vector(readToneprint);
   }
 

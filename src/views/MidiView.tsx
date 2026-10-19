@@ -1,6 +1,7 @@
 import Section from '../components/Section';
 import { useApp } from '../state/context';
 import { slotLabel } from '../state/presets';
+import { displayValue, settingLabel } from '../state/settingLabels';
 
 export default function MidiView() {
   const { state } = useApp();
@@ -37,10 +38,8 @@ export default function MidiView() {
                 <tbody>
                   {(midiSettings?.settings ?? []).map((s) => (
                     <tr key={s.key}>
-                      <td>{s.key}</td>
-                      <td className="mono">
-                        {s.allowedValues.find((a) => a.value === s.value)?.name ?? s.value}
-                      </td>
+                      <td>{settingLabel(s)}</td>
+                      <td className="mono">{displayValue(s)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -49,10 +48,15 @@ export default function MidiView() {
           </Section>
 
           {directions.map((direction) => (
-            <Section key={direction} title={`Program Change map, direction ${direction}`}>
+            <Section
+              key={direction}
+              title={direction === 0
+                ? 'MIDI in: Program Change to preset'
+                : 'MIDI out: preset to Program Change'}
+            >
               <p className="small muted">
-                The protocol marks MIDI IN and MIDI OUT with a direction number; which is which is
-                not yet confirmed.
+                {`Direction ${direction} in the protocol. Which direction is MIDI in and which is `}
+                MIDI out is inferred from the order the official app reads them.
               </p>
               <div className="table-wrap">
                 <table>

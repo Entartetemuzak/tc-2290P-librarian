@@ -12,6 +12,8 @@ const MIDI_TEXT: Record<MidiStatus, string> = {
   error: 'MIDI unavailable',
 };
 
+const MIDI_PROBLEM = new Set<MidiStatus>(['error', 'unsupported']);
+
 const LINK_TEXT: Record<LinkMode, string> = {
   disconnected: 'Not connected',
   connecting: 'Connecting…',
@@ -20,10 +22,10 @@ const LINK_TEXT: Record<LinkMode, string> = {
 };
 
 const LINK_LED: Record<LinkMode, LedState> = {
-  disconnected: 'off',
-  connecting: 'on',
-  librarian: 'ok',
-  controlOnly: 'on',
+  disconnected: 'red',
+  connecting: 'blink',
+  librarian: 'yellow',
+  controlOnly: 'yellow',
 };
 
 export default function ConnectionPanel() {
@@ -36,7 +38,7 @@ export default function ConnectionPanel() {
     return (
       <Section title="Connection">
         <div className="status-line">
-          <Led state={state.midiStatus === 'error' ? 'error' : 'off'} />
+          <Led state={MIDI_PROBLEM.has(state.midiStatus) ? 'red' : 'off'} />
           <span>{MIDI_TEXT[state.midiStatus]}</span>
         </div>
         {state.midiError && <p className="small muted">{state.midiError}</p>}
@@ -105,7 +107,7 @@ export default function ConnectionPanel() {
       )}
       {state.busy && (
         <div className="busy" role="status" style={{ marginTop: '0.6rem' }}>
-          <Led state="on" />
+          <Led state="blink" />
           <span>{state.busy}</span>
         </div>
       )}

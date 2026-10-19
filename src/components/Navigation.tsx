@@ -24,7 +24,7 @@ export default function Navigation() {
               aria-current={state.view === view.id ? 'page' : undefined}
               onClick={() => actions.setView(view.id)}
             >
-              <Led state={state.view === view.id ? 'on' : 'off'} />
+              <Led state={state.view === view.id ? 'yellow' : 'off'} />
               {view.label}
             </button>
           </li>

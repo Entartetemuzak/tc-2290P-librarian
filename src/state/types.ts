@@ -17,6 +17,9 @@ export type ViewId = 'presets' | 'live' | 'midi' | 'settings' | 'backup' | 'moni
 
 export type PresetSource = 'pedal' | 'library';
 
+/** A preset location (0–127) or a remembered preset (TonePrint ID). */
+export type DetailsTarget = { kind: 'location'; index: number } | { kind: 'library'; id: string };
+
 export interface LibraryState {
   fileName: string;
   presets: LibraryPreset[];
@@ -50,6 +53,8 @@ export interface AppState {
   library: LibraryState | null;
   source: PresetSource;
   selectedIndex: number;
+  /** What the details dialog shows, if it is open. */
+  details: DetailsTarget | null;
   traffic: TrafficEntry[];
   midiChannel: number;
   experimental: boolean;
@@ -67,6 +72,9 @@ export type Action = { type: 'setView'; view: ViewId }
   | { type: 'link'; mode: LinkMode }
   | { type: 'pedalData'; data: PedalData }
   | { type: 'toneprints'; toneprints: Toneprint[] }
+  | { type: 'forgetToneprints' }
+  | { type: 'openDetails'; target: DetailsTarget }
+  | { type: 'closeDetails' }
   | { type: 'push'; push: PedalPush }
   | { type: 'libraryLoaded'; library: LibraryState }
   | { type: 'libraryChanged'; presets: LibraryState['presets'] }

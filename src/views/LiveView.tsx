@@ -3,10 +3,16 @@ import Section from '../components/Section';
 import { CONTROLS, type ControlDefinition, PEDAL_ACTIONS } from '../protocol/ccMap';
 import { useApp } from '../state/context';
 
-function Control({ control, disabled }: { control: ControlDefinition; disabled: boolean }) {
+interface ControlProps {
+  control: ControlDefinition;
+  disabled: boolean;
+  initial: number;
+}
+
+function Control({ control, disabled, initial }: ControlProps) {
   const { actions } = useApp();
   const id = useId();
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(initial);
   const send = (next: number) => {
     setValue(next);
     actions.sendControl(control.cc, next);
@@ -78,6 +84,14 @@ const PEDAL_BUTTONS = [
 
 export default function LiveView() {
   const { state, actions } = useApp();
+  const activeId = state.current
+    ? state.assignments.find((a) => a.group === 0
+      && a.board === state.current?.board && a.slot === state.current.slot)?.toneprintId
+    : undefined;
+  const active = activeId ? state.toneprints[activeId] : undefined;
+  const activeLabel = state.current
+    ? `${state.current.board}${state.current.slot === 0 ? 'A' : 'B'}`
+    : null;
   const channelId = useId();
   const delayId = useId();
   const [delayMs, setDelayMs] = useState('350');
@@ -91,10 +105,16 @@ export default function LiveView() {
           <h2>Live control</h2>
           <p>
             Changes the sound in real time with MIDI Control Change, over USB or a 5-pin MIDI
-            interface. Controls start at zero because the pedal does not report their current
-            values; changes are not stored until you press STORE on the pedal.
+            interface. Controls start at the active preset&apos;s stored values when they are
+            known. Changes are kept only when you press STORE on the pedal.
           </p>
         </div>
+        {activeLabel && (
+          <div className="display" style={{ minWidth: '14rem' }}>
+            <p className="display__name">{active?.name ?? 'Unknown preset'}</p>
+            <p className="display__meta">{`Active preset ${activeLabel}`}</p>
+          </div>
+        )}
         {state.liveDelayMs !== null && (
           <div className="readout" role="status" aria-label="Delay time reported by the pedal">
             <span className="small">Delay time</span>
@@ -170,7 +190,12 @@ export default function LiveView() {
         <Section key={section} title={section}>
           <div className="control-grid">
             {CONTROLS.filter((c) => c.section === section).map((control) => (
-              <Control key={control.cc} control={control} disabled={disabled} />
+              <Control
+                key={`${control.cc}:${activeId ?? 'none'}`}
+                control={control}
+                disabled={disabled}
+                initial={active && control.fromPreset ? control.fromPreset(active.data) : 0}
+              />
             ))}
           </div>
         </Section>

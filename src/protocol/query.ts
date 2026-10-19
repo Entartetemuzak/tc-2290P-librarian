@@ -50,6 +50,8 @@ export function readQuery(reader: ByteReader): Query {
 /** Exact table names used by the protocol (note the inconsistent capitalization). */
 export const Table = {
   TONEPRINT: 'toneprint',
+  TONEPRINT_DATA: 'tpData',
+  ARTIST: 'artist',
   EFFECT: 'effect',
   SETTINGS_GROUP: 'settingsGroup',
   SETTING: 'setting',

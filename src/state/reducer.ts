@@ -24,6 +24,7 @@ export const initialState: AppState = {
   library: null,
   source: 'pedal',
   selectedIndex: 0,
+  details: null,
   traffic: [],
   midiChannel: 1,
   experimental: false,
@@ -99,9 +100,26 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         toneprints: {
           ...state.toneprints,
-          ...Object.fromEntries(action.toneprints.map((t) => [t.id, t])),
+          ...Object.fromEntries(action.toneprints.map((t) => [t.id, {
+            ...t,
+            // Backup files do not say whether a preset is factory or user; keep what the
+            // pedal reported earlier.
+            artistId: t.artistId || state.toneprints[t.id]?.artistId || '',
+          }])),
         },
       };
+    case 'openDetails':
+      return {
+        ...state,
+        details: action.target,
+        selectedIndex: action.target.kind === 'location'
+          ? action.target.index
+          : state.selectedIndex,
+      };
+    case 'closeDetails':
+      return { ...state, details: null };
+    case 'forgetToneprints':
+      return { ...state, toneprints: {} };
     case 'push':
       return applyPush(state, action.push);
     case 'libraryLoaded':

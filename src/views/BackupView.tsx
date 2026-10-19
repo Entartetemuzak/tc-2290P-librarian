@@ -34,7 +34,7 @@ export default function BackupView() {
         {library ? (
           <>
             <div className="status-line">
-              <Led state={library.checksumValid ? 'ok' : 'error'} />
+              <Led state={library.checksumValid ? 'yellow' : 'red'} />
               <span>
                 {library.checksumValid
                   ? `${library.fileName}: ${library.presets.length} presets, checksum OK`
@@ -43,7 +43,7 @@ export default function BackupView() {
             </div>
             {library.modified && (
               <div className="status-line">
-                <Led state="on" />
+                <Led state="red" />
                 <span>Changed since opening. Save a new file to keep the changes.</span>
               </div>
             )}
@@ -100,10 +100,37 @@ export default function BackupView() {
         )}
       </Section>
 
+      <Section title="Presets remembered in this browser">
+        <p className="small" style={{ marginTop: 0 }}>
+          {`${Object.keys(state.toneprints).length} presets. `}
+          Names and parameters are read from the pedal when you connect and from backup files you
+          open, then kept in this browser so they show up at once next time.
+        </p>
+        <div className="button-row">
+          <button
+            type="button"
+            className="button"
+            disabled={!librarian || state.busy !== null}
+            onClick={actions.readPresetNames}
+          >
+            Read all presets from the pedal again
+          </button>
+          <button
+            type="button"
+            className="button"
+            disabled={Object.keys(state.toneprints).length === 0}
+            onClick={actions.forgetPresets}
+          >
+            Forget remembered presets
+          </button>
+        </div>
+      </Section>
+
       <Section title="Experimental: write to the pedal">
         <p className="small">
-          These functions talk to the pedal the way the official app does, but they have only
-          been verified against captured traffic. Take a backup with the official app first.
+          Writes presets to the pedal the way the official app does. Verified against captured
+          traffic only, so take a backup with the official app first. When enabled, the Presets
+          page can also put any remembered preset on a location.
         </p>
         <label className="checkbox" htmlFor={experimentalId}>
           <input
@@ -119,19 +146,6 @@ export default function BackupView() {
         </label>
         {state.experimental && (
           <>
-            <div className="button-row">
-              <button
-                type="button"
-                className="button"
-                disabled={!librarian || state.busy !== null}
-                onClick={actions.readToneprints}
-              >
-                Read TonePrints from the pedal
-              </button>
-            </div>
-            <p className="small muted">
-              Shows names and parameters for the presets on the pedal without a backup file.
-            </p>
             {confirming ? (
               <div className="warning" role="alert">
                 <p style={{ marginTop: 0 }}>

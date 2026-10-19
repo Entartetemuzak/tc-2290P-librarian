@@ -24,8 +24,22 @@ export interface DecodedMessage {
 
 type BodyReader = (r: ByteReader) => unknown;
 
+const readWithUint: BodyReader = (r) => ({ query: readQuery(r), parameter: r.uint() });
+const readWithOptional: BodyReader = (r) => ({
+  query: readQuery(r), parameter: r.optional((rr) => rr.uint()),
+});
+
 const REQUEST_BODIES: Readonly<Record<number, BodyReader>> = {
   [Command.EVENT_REQUEST]: (r) => ({ eventId: r.uint() }),
+  [Command.TONEPRINT_READ]: (r) => ({
+    query: readQuery(r), parameter: r.optional((rr) => rr.string()),
+  }),
+  [Command.EFFECT_READ]: readWithOptional,
+  [Command.SETTINGS_READ]: readWithUint,
+  [Command.MIDI_PC_READ]: readWithUint,
+  [Command.MIDI_CC_READ]: readWithUint,
+  [Command.ASSIGNED_READ]: readWithUint,
+  [Command.LIVE_READ]: readWithOptional,
   [Command.TONEPRINT_CREATE]: (r) => ({ query: readQuery(r), toneprint: readToneprint(r) }),
   [Command.TONEPRINT_UPDATE]: (r) => ({ query: readQuery(r), toneprint: readToneprint(r) }),
   [Command.SETTINGS_UPDATE]: (r) => ({ query: readQuery(r), groups: r.vector(readSettingsGroup) }),
