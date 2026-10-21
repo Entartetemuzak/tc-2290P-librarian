@@ -201,7 +201,19 @@ export default function AppProvider({ children }: { children: ReactNode }) {
           + 'work; preset names, the library and backups need SysEx.');
       }
       watchPorts(midi, (port) => {
-        if (port && port.id !== undefined) announcedPorts.current.set(String(port.id), port);
+        if (port && port.id !== undefined) {
+          const id = String(port.id);
+          if (port.state === 'disconnected') {
+            announcedPorts.current.delete(id);
+            const { inputId, outputId, link: mode } = stateRef.current;
+            if (mode !== 'disconnected' && (id === inputId || id === outputId)) {
+              disconnect();
+              notify('error', `${port.name ?? 'The pedal'} was disconnected.`);
+            }
+          } else {
+            announcedPorts.current.set(id, port);
+          }
+        }
         refreshPorts();
       });
       dispatch({ type: 'midiStatus', status: 'ready' });
@@ -213,9 +225,13 @@ export default function AppProvider({ children }: { children: ReactNode }) {
         status: unsupported ? 'unsupported' : 'error',
         error: describeAccessError(error),
       });
-      dispatch({ type: 'midiDebug', text: inspectMidi(null, [], accessAttempts.current) });
+      // Report what was actually granted: setup can fail after access has been given.
+      dispatch({
+        type: 'midiDebug',
+        text: inspectMidi(access.current, announced(), accessAttempts.current),
+      });
     }
-  }, [notify, refreshPorts]);
+  }, [disconnect, notify, refreshPorts]);
 
   const openBackupAsync = useCallback(async (file: File) => {
     const doc = await parseBackup(await file.text());

@@ -40,10 +40,11 @@ Web MIDI with SysEx is required.
 - **Firefox:** supported; the first visit installs a site permission add-on.
 - **Safari:** not supported (no Web MIDI).
 - **iPhone and iPad:** iOS browsers have no Web MIDI, but apps that add Web MIDI with SysEx to
-  their built-in browser should work, for example Web MIDI Browser. Connect the pedal over USB through
-  a USB-A socket, for example Apple's USB-C Digital AV Multiport Adapter with a USB-A to USB-C
-  cable; with a direct USB-C to USB-C cable the pedal is not detected. Bluetooth MIDI adapters
-  connect to the 5-pin ports instead, where only MIDI control (CC and PC) is confirmed.
+  their built-in browser work. Tested on an iPhone 16 with Web MIDI Browser: the full librarian
+  works. Connect the pedal over USB through a USB-A socket, for example Apple's USB-C Digital AV
+  Multiport Adapter with a USB-A to USB-C cable; with a direct USB-C to USB-C cable the pedal is
+  not detected. Bluetooth MIDI adapters connect to the 5-pin ports instead, where only MIDI
+  control (CC and PC) is confirmed.
 
 Web MIDI only works on HTTPS or `localhost`. GitHub Pages serves HTTPS.
 

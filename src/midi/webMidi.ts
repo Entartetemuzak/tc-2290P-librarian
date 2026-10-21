@@ -130,7 +130,8 @@ function portsOfType(
     .forEach((p) => byId.set(portId(p), p));
   announced.filter((p) => p.type === type && !byId.has(portId(p)))
     .forEach((p) => byId.set(portId(p), p));
-  return [...byId.values()];
+  // A port that has been unplugged can stay in the map with the state "disconnected".
+  return [...byId.values()].filter((p) => p.state !== 'disconnected');
 }
 
 export function listPorts(

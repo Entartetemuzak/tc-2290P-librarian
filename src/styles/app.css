@@ -327,11 +327,29 @@ textarea { font-family: var(--font-lcd); font-size: var(--step--1); min-height: 
   font-size: var(--step--1);
 }
 
+.board-list {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  container-type: inline-size;
+}
+
 .board {
   display: grid;
   grid-template-columns: 3.4rem minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.5rem;
   align-items: stretch;
+}
+
+/* Narrow lists (phones): preset A and B as two rows beside the board number. */
+@container (max-width: 34rem) {
+  .board {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    row-gap: 0.25rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .board .digits { grid-row: span 2; }
 }
 
 .digits {
