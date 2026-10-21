@@ -7,6 +7,7 @@ export const initialState: AppState = {
   view: 'presets',
   midiStatus: 'idle',
   midiError: null,
+  midiDebug: '',
   inputs: [],
   outputs: [],
   inputId: '',
@@ -66,6 +67,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, view: action.view };
     case 'midiStatus':
       return { ...state, midiStatus: action.status, midiError: action.error ?? null };
+    case 'midiDebug':
+      return { ...state, midiDebug: action.text };
     case 'ports':
       return { ...state, inputs: action.inputs, outputs: action.outputs };
     case 'choosePorts':

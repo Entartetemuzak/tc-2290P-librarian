@@ -16,6 +16,7 @@ export default function Sidebar() {
           owner, used here only to describe compatibility.
         </p>
         <p>Take a backup with the official app before writing anything to the pedal.</p>
+        <p>{`Build ${import.meta.env.VITE_BUILD_ID}`}</p>
       </footer>
     </aside>
   );

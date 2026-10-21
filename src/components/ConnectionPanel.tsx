@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import MidiDetails from './MidiDetails';
 import { useApp } from '../state/context';
 import type { LinkMode, MidiStatus } from '../state/types';
 import Led, { type LedState } from './Led';
@@ -43,6 +44,7 @@ export default function ConnectionPanel() {
           <span>{MIDI_TEXT[state.midiStatus]}</span>
         </div>
         {state.midiError && <p className="small muted">{state.midiError}</p>}
+        <MidiDetails text={state.midiDebug} />
         <div className="button-row">
           <button
             type="button"
@@ -104,6 +106,7 @@ export default function ConnectionPanel() {
           </button>
         )}
       </div>
+      {state.link === 'disconnected' && <MidiDetails text={state.midiDebug} />}
       <div className="status-line" style={{ marginTop: '0.8rem' }}>
         <Led state={LINK_LED[state.link]} />
         <span>{LINK_TEXT[state.link]}</span>

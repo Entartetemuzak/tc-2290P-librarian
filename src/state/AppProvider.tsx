@@ -3,8 +3,8 @@ import {
 } from 'react';
 import DeviceLink from '../midi/DeviceLink';
 import {
-  describeAccessError, findInput, findOutput, findPedalPort, listPorts, requestMidiAccess,
-  watchPorts,
+  describeAccessError, findInput, findOutput, findPedalPort, inspectMidi, listPorts,
+  requestMidiAccess, watchPorts,
 } from '../midi/webMidi';
 import {
   type LibraryPreset, cleanPresetName, newToneprintId, parseBackup, serializeBackup,
@@ -56,11 +56,17 @@ export default function AppProvider({ children }: { children: ReactNode }) {
 
   /** True once the user picks ports by hand; until then the pedal's ports are picked. */
   const userChosePorts = useRef(false);
+  /** Ports announced through state-change events, in case the port maps stay empty. */
+  const announcedPorts = useRef(new Map<string, MIDIPort>());
+  const announced = (): MIDIPort[] => [...announcedPorts.current.values()];
+  /** False when the browser granted MIDI without SysEx. */
+  const sysexAllowed = useRef(true);
 
   const refreshPorts = useCallback(() => {
     if (!access.current) return;
-    const { inputs, outputs } = listPorts(access.current);
+    const { inputs, outputs } = listPorts(access.current, announced());
     dispatch({ type: 'ports', inputs, outputs });
+    dispatch({ type: 'midiDebug', text: inspectMidi(access.current, announced()) });
     const { current } = stateRef;
     const pick = (ports: typeof inputs, chosen: string): string => {
       const stillThere = ports.some((p) => p.id === chosen);
@@ -137,8 +143,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   const connectAsync = useCallback(async () => {
     const midi = access.current;
     const { inputId, outputId } = stateRef.current;
-    const input = midi ? findInput(midi, inputId) : undefined;
-    const output = midi ? findOutput(midi, outputId) : undefined;
+    const input = midi ? findInput(midi, inputId, announced()) : undefined;
+    const output = midi ? findOutput(midi, outputId, announced()) : undefined;
     if (!input || !output) {
       notify('error', 'Choose a MIDI input and output first.');
       return;
@@ -150,6 +156,11 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       onPush: (push) => dispatch({ type: 'push', push }),
     });
     link.current = device;
+    if (!sysexAllowed.current) {
+      dispatch({ type: 'link', mode: 'controlOnly' });
+      notify('info', 'Connected for MIDI control only, because this browser does not allow SysEx.');
+      return;
+    }
     const version = await device.probe();
     if (!version) {
       dispatch({ type: 'link', mode: 'controlOnly' });
@@ -176,9 +187,17 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   const enableMidiAsync = useCallback(async () => {
     dispatch({ type: 'midiStatus', status: 'requesting' });
     try {
-      const midi = await requestMidiAccess();
+      const { access: midi, sysex } = await requestMidiAccess();
       access.current = midi;
-      watchPorts(midi, refreshPorts);
+      sysexAllowed.current = sysex;
+      if (!sysex) {
+        notify('error', 'This browser allows MIDI but not SysEx. Live control and Program Change '
+          + 'work; preset names, the library and backups need SysEx.');
+      }
+      watchPorts(midi, (port) => {
+        if (port && port.id !== undefined) announcedPorts.current.set(String(port.id), port);
+        refreshPorts();
+      });
       dispatch({ type: 'midiStatus', status: 'ready' });
       refreshPorts();
     } catch (error) {
@@ -188,8 +207,9 @@ export default function AppProvider({ children }: { children: ReactNode }) {
         status: unsupported ? 'unsupported' : 'error',
         error: describeAccessError(error),
       });
+      dispatch({ type: 'midiDebug', text: inspectMidi(null, []) });
     }
-  }, [refreshPorts]);
+  }, [notify, refreshPorts]);
 
   const openBackupAsync = useCallback(async (file: File) => {
     const doc = await parseBackup(await file.text());

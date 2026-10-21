@@ -25,6 +25,8 @@ interface TileProps {
   editable: boolean;
   dropTarget: boolean;
   reading: boolean;
+  /** Connected for MIDI control only: a click sends Program Change. */
+  controlOnly: boolean;
   onSelect: () => void;
   onDetails: () => void;
   onDragEnter: () => void;
@@ -32,7 +34,8 @@ interface TileProps {
 }
 
 function Tile({
-  slot, selected, editable, dropTarget, reading, onSelect, onDetails, onDragEnter, onDrop,
+  slot, selected, editable, dropTarget, reading, controlOnly,
+  onSelect, onDetails, onDragEnter, onDrop,
 }: TileProps) {
   const classes = ['lcd'];
   if (!slot.name && !slot.toneprintId) classes.push('lcd--empty');
@@ -40,6 +43,7 @@ function Tile({
   if (dropTarget) classes.push('lcd--drop');
   let label = slot.name;
   if (!label && reading) label = 'Reading…';
+  if (!label && controlOnly) label = `Program ${slot.index}`;
   if (!label) label = slot.toneprintId ? `ID ${slot.toneprintId.slice(0, 8)}` : 'Empty';
   return (
     <div className="tile">
@@ -160,6 +164,7 @@ export default function PresetsView() {
                         editable={librarian}
                         dropTarget={librarian && dragOver === slot.index}
                         reading={reading}
+                        controlOnly={state.link === 'controlOnly'}
                         onSelect={() => {
                           actions.select(slot.index);
                           actions.recallPreset(slot.index);

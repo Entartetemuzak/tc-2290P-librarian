@@ -34,6 +34,8 @@ export interface AppState {
   view: ViewId;
   midiStatus: MidiStatus;
   midiError: string | null;
+  /** What the browser's Web MIDI provides, shown for troubleshooting. */
+  midiDebug: string;
   inputs: PortInfo[];
   outputs: PortInfo[];
   inputId: string;
@@ -64,6 +66,7 @@ export type PedalData = Partial<Pick<AppState,
 export type Action = { type: 'setView'; view: ViewId }
   | { type: 'midiStatus'; status: MidiStatus; error?: string | null }
   | { type: 'ports'; inputs: PortInfo[]; outputs: PortInfo[] }
+  | { type: 'midiDebug'; text: string }
   | { type: 'choosePorts'; inputId?: string; outputId?: string }
   | { type: 'link'; mode: LinkMode }
   | { type: 'pedalData'; data: PedalData }

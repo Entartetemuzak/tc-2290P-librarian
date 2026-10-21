@@ -62,7 +62,8 @@ export default class DeviceLink {
   }
 
   send(bytes: readonly number[]): void {
-    this.output.send([...bytes]);
+    // "Now" as an explicit timestamp: optional in the standard, but some implementations need it.
+    this.output.send([...bytes], typeof performance !== 'undefined' ? performance.now() : 0);
     this.trafficId += 1;
     this.listener.onTraffic({
       id: this.trafficId, time: Date.now(), direction: 'out', bytes: [...bytes],

@@ -207,6 +207,21 @@ textarea { font-family: var(--font-lcd); font-size: var(--step--1); min-height: 
 .muted { color: var(--silk-dim); }
 .small { font-size: var(--step--1); }
 
+.midi-details { margin-top: 0.6rem; font-size: var(--step--1); }
+.midi-details summary { cursor: pointer; color: var(--silk-dim); }
+.midi-details pre {
+  margin: 0.4rem 0;
+  padding: 0.5rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-small);
+  background: #000;
+  font-family: var(--font-lcd);
+  font-size: 0.6875rem;
+}
+
 .ear__footer { margin-top: auto; font-size: 0.75rem; color: var(--silk-faint); }
 .ear__footer p { margin: 0 0 0.5rem; }
 .ear__footer a { color: var(--silk-dim); }
