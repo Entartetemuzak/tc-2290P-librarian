@@ -59,6 +59,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   /** Ports announced through state-change events, in case the port maps stay empty. */
   const announcedPorts = useRef(new Map<string, MIDIPort>());
   const announced = (): MIDIPort[] => [...announcedPorts.current.values()];
+  /** What happened at each request for MIDI access, for troubleshooting. */
+  const accessAttempts = useRef<string[]>([]);
   /** False when the browser granted MIDI without SysEx. */
   const sysexAllowed = useRef(true);
 
@@ -66,7 +68,10 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     if (!access.current) return;
     const { inputs, outputs } = listPorts(access.current, announced());
     dispatch({ type: 'ports', inputs, outputs });
-    dispatch({ type: 'midiDebug', text: inspectMidi(access.current, announced()) });
+    dispatch({
+      type: 'midiDebug',
+      text: inspectMidi(access.current, announced(), accessAttempts.current),
+    });
     const { current } = stateRef;
     const pick = (ports: typeof inputs, chosen: string): string => {
       const stillThere = ports.some((p) => p.id === chosen);
@@ -187,7 +192,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   const enableMidiAsync = useCallback(async () => {
     dispatch({ type: 'midiStatus', status: 'requesting' });
     try {
-      const { access: midi, sysex } = await requestMidiAccess();
+      accessAttempts.current = [];
+      const { access: midi, sysex } = await requestMidiAccess(accessAttempts.current);
       access.current = midi;
       sysexAllowed.current = sysex;
       if (!sysex) {
@@ -207,7 +213,7 @@ export default function AppProvider({ children }: { children: ReactNode }) {
         status: unsupported ? 'unsupported' : 'error',
         error: describeAccessError(error),
       });
-      dispatch({ type: 'midiDebug', text: inspectMidi(null, []) });
+      dispatch({ type: 'midiDebug', text: inspectMidi(null, [], accessAttempts.current) });
     }
   }, [notify, refreshPorts]);
 

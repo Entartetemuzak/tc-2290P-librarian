@@ -16,26 +16,74 @@ export const isWebMidiSupported = (): boolean => (
   typeof navigator !== 'undefined' && typeof navigator.requestMIDIAccess === 'function'
 );
 
+const describeError = (error: unknown): string => {
+  if (error && typeof error === 'object') {
+    const e = error as { name?: unknown; message?: unknown };
+    return `${String(e.name ?? 'Error')}: ${String(e.message ?? '')}`;
+  }
+  return `threw ${typeof error}: ${String(error)}`;
+};
+
+/** Settles with null if the promise does not settle in time (some implementations never do). */
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+const ACCESS_OPTIONS: { label: string; options: MIDIOptions | undefined; sysex: boolean }[] = [
+  { label: '{ sysex: true }', options: { sysex: true }, sysex: true },
+  { label: '{ sysex: false }', options: { sysex: false }, sysex: false },
+  { label: '(no options)', options: undefined, sysex: false },
+];
+
 /**
- * Asks for MIDI with SysEx, which the librarian needs. If the browser refuses SysEx, asks
- * again without it, so live control and Program Change still work.
+ * Asks for MIDI with SysEx, which the librarian needs. If that fails, asks again without
+ * SysEx, so live control and Program Change still work. Each attempt and its outcome is
+ * added to the log, for troubleshooting.
  */
-export async function requestMidiAccess(): Promise<{ access: MIDIAccess; sysex: boolean }> {
+export async function requestMidiAccess(
+  log: string[],
+): Promise<{ access: MIDIAccess; sysex: boolean }> {
   if (!isWebMidiSupported()) {
     throw new Error('This browser has no Web MIDI. Use Chrome, Edge, Opera or Firefox, '
       + 'or on iOS an app that adds Web MIDI to its browser.');
   }
-  try {
-    const access = await navigator.requestMIDIAccess({ sysex: true });
-    return { access, sysex: access.sysexEnabled !== false };
-  } catch (withSysexError) {
-    try {
-      const access = await navigator.requestMIDIAccess({ sysex: false });
-      return { access, sysex: false };
-    } catch {
-      throw withSysexError;
+  for (let i = 0; i < ACCESS_OPTIONS.length; i += 1) {
+    const attempt = ACCESS_OPTIONS[i];
+    if (attempt) {
+      try {
+        const result: unknown = attempt.options
+          ? navigator.requestMIDIAccess(attempt.options)
+          : navigator.requestMIDIAccess();
+        if (!result || typeof (result as PromiseLike<unknown>).then !== 'function') {
+          log.push(`${attempt.label}: returned ${typeof result}, not a promise`);
+        } else {
+          // Each attempt must finish before the next one starts.
+          // eslint-disable-next-line no-await-in-loop
+          const access = await withTimeout(result as PromiseLike<MIDIAccess>, 8000);
+          if (access) {
+            log.push(`${attempt.label}: granted`);
+            return { access, sysex: attempt.sysex && access.sysexEnabled !== false };
+          }
+          log.push(`${attempt.label}: no answer within 8 seconds`);
+        }
+      } catch (error) {
+        log.push(`${attempt.label}: ${describeError(error)}`);
+      }
     }
   }
+  throw new Error('The browser refused MIDI access. Open MIDI details for what happened.');
 }
 
 interface PortMapLike {
@@ -158,9 +206,13 @@ const describeMap = (map: unknown): string => {
 };
 
 /** A plain-text summary of what the browser's Web MIDI provides, for troubleshooting. */
-export function inspectMidi(access: MIDIAccess | null, announced: readonly MIDIPort[]): string {
+export function inspectMidi(
+  access: MIDIAccess | null,
+  announced: readonly MIDIPort[],
+  attempts: readonly string[],
+): string {
   const request = typeof navigator !== 'undefined' ? typeof navigator.requestMIDIAccess : 'n/a';
-  const lines = [`requestMIDIAccess: ${request}`];
+  const lines = [`requestMIDIAccess: ${request}`, ...attempts.map((a) => `attempt ${a}`)];
   if (!access) return [...lines, 'MIDI access: not granted'].join('\n');
   lines.push(`sysexEnabled: ${String(access.sysexEnabled)}`);
   lines.push(`inputs: ${describeMap(access.inputs)}`);
