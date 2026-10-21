@@ -42,11 +42,13 @@ export default class DeviceLink {
     private readonly output: MIDIOutput,
     private readonly listener: LinkListener,
   ) {
-    this.input.addEventListener('midimessage', this.handleMessage);
+    // The callback property is supported more widely than addEventListener, and setting it
+    // opens the port.
+    this.input.onmidimessage = this.handleMessage;
   }
 
   dispose(): void {
-    this.input.removeEventListener('midimessage', this.handleMessage);
+    if (this.input.onmidimessage === this.handleMessage) this.input.onmidimessage = null;
     this.pending.forEach((p) => {
       clearTimeout(p.timer);
       p.reject(new Error('The connection was closed.'));
@@ -60,7 +62,7 @@ export default class DeviceLink {
   }
 
   send(bytes: readonly number[]): void {
-    this.output.send(bytes);
+    this.output.send([...bytes]);
     this.trafficId += 1;
     this.listener.onTraffic({
       id: this.trafficId, time: Date.now(), direction: 'out', bytes: [...bytes],

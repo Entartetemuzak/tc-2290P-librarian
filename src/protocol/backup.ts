@@ -41,8 +41,8 @@ export function dataToBase64(data: readonly number[]): string {
   return btoa(binary);
 }
 
-/** The JUCE JSON formatting the vendor app writes: two-space indent, CRLF line endings. */
-const toJuceJson = (value: unknown): string => (
+/** The JSON formatting backup files use: two-space indent, CRLF line endings. */
+const toBackupJson = (value: unknown): string => (
   JSON.stringify(value, null, 2).replace(/\n/g, '\r\n')
 );
 
@@ -62,7 +62,7 @@ export async function computeChecksum(entries: readonly BackupEntry[]): Promise<
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(toJuceJson(entries)));
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(toBackupJson(entries)));
   return Array.from(new Uint8Array(signature), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -108,7 +108,7 @@ export async function parseBackup(text: string): Promise<BackupDocument> {
 
 export async function serializeBackup(presets: readonly LibraryPreset[]): Promise<string> {
   const entries = presets.map(toEntry);
-  return toJuceJson({
+  return toBackupJson({
     'Content type': CONTENT_TYPE,
     Presets: entries,
     CheckSum: await computeChecksum(entries),

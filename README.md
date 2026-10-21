@@ -39,6 +39,11 @@ Web MIDI with SysEx is required.
 - **Chrome, Edge, Opera (desktop):** supported. The browser asks for MIDI permission.
 - **Firefox:** supported; the first visit installs a site permission add-on.
 - **Safari:** not supported (no Web MIDI).
+- **iPhone and iPad:** iOS browsers have no Web MIDI, but apps that add Web MIDI with SysEx to
+  their built-in browser should work, for example Web MIDI Browser. Connect the pedal over USB through
+  a USB-A socket, for example Apple's USB-C Digital AV Multiport Adapter with a USB-A to USB-C
+  cable; with a direct USB-C to USB-C cable the pedal is not detected. Bluetooth MIDI adapters
+  connect to the 5-pin ports instead, where only MIDI control (CC and PC) is confirmed.
 
 Web MIDI only works on HTTPS or `localhost`. GitHub Pages serves HTTPS.
 
@@ -99,6 +104,8 @@ src/
 ```
 
 ## How the protocol works, briefly
+
+The full description is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 The pedal speaks a request/response protocol inside SysEx messages
 `F0 00 20 1F 00 36 68 … F7` (TC Electronic manufacturer ID, product 0x0036, command 0x68).

@@ -5,6 +5,7 @@ export interface AppActions {
   setView: (view: ViewId) => void;
   enableMidi: () => void;
   choosePorts: (inputId: string, outputId: string) => void;
+  refreshPorts: () => void;
   connect: () => void;
   disconnect: () => void;
   select: (index: number) => void;

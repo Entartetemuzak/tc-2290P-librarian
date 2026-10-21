@@ -3,7 +3,8 @@ import {
 } from 'react';
 import DeviceLink from '../midi/DeviceLink';
 import {
-  describeAccessError, findPedalPort, isWebMidiSupported, listPorts, requestMidiAccess,
+  describeAccessError, findInput, findOutput, findPedalPort, listPorts, requestMidiAccess,
+  watchPorts,
 } from '../midi/webMidi';
 import {
   type LibraryPreset, cleanPresetName, newToneprintId, parseBackup, serializeBackup,
@@ -35,7 +36,6 @@ const currentFromSettings = (
 export default function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState, (init): AppState => ({
     ...init,
-    midiStatus: isWebMidiSupported() ? 'idle' : 'unsupported',
     toneprints: loadToneprintCache(),
   }));
   const access = useRef<MIDIAccess | null>(null);
@@ -54,17 +54,37 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     notify('error', errorText(error));
   }, [notify]);
 
+  /** True once the user picks ports by hand; until then the pedal's ports are picked. */
+  const userChosePorts = useRef(false);
+
   const refreshPorts = useCallback(() => {
     if (!access.current) return;
     const { inputs, outputs } = listPorts(access.current);
     dispatch({ type: 'ports', inputs, outputs });
     const { current } = stateRef;
+    const pick = (ports: typeof inputs, chosen: string): string => {
+      const stillThere = ports.some((p) => p.id === chosen);
+      const pedal = findPedalPort(ports);
+      // Ports can appear one by one (e.g. a network session before the pedal), so switch
+      // to the pedal when it shows up unless the user has chosen ports themselves.
+      if (pedal && !userChosePorts.current && current.link === 'disconnected') return pedal.id;
+      if (stillThere) return chosen;
+      return pedal?.id ?? ports[0]?.id ?? '';
+    };
     dispatch({
       type: 'choosePorts',
-      inputId: current.inputId || findPedalPort(inputs)?.id || inputs[0]?.id || '',
-      outputId: current.outputId || findPedalPort(outputs)?.id || outputs[0]?.id || '',
+      inputId: pick(inputs, current.inputId),
+      outputId: pick(outputs, current.outputId),
     });
   }, []);
+
+  // Some Web MIDI implementations announce ports late or never send change events,
+  // so look again every two seconds while MIDI is enabled.
+  useEffect(() => {
+    if (state.midiStatus !== 'ready') return undefined;
+    const timer = setInterval(refreshPorts, 2000);
+    return () => clearInterval(timer);
+  }, [state.midiStatus, refreshPorts]);
 
   const disconnect = useCallback(() => {
     link.current?.dispose();
@@ -117,8 +137,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
   const connectAsync = useCallback(async () => {
     const midi = access.current;
     const { inputId, outputId } = stateRef.current;
-    const input = midi?.inputs.get(inputId);
-    const output = midi?.outputs.get(outputId);
+    const input = midi ? findInput(midi, inputId) : undefined;
+    const output = midi ? findOutput(midi, outputId) : undefined;
     if (!input || !output) {
       notify('error', 'Choose a MIDI input and output first.');
       return;
@@ -158,11 +178,16 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     try {
       const midi = await requestMidiAccess();
       access.current = midi;
-      midi.addEventListener('statechange', refreshPorts);
+      watchPorts(midi, refreshPorts);
       dispatch({ type: 'midiStatus', status: 'ready' });
       refreshPorts();
     } catch (error) {
-      dispatch({ type: 'midiStatus', status: 'error', error: describeAccessError(error) });
+      const unsupported = typeof navigator.requestMIDIAccess !== 'function';
+      dispatch({
+        type: 'midiStatus',
+        status: unsupported ? 'unsupported' : 'error',
+        error: describeAccessError(error),
+      });
     }
   }, [refreshPorts]);
 
@@ -309,9 +334,11 @@ export default function AppProvider({ children }: { children: ReactNode }) {
       enableMidiAsync().catch(report);
     },
     choosePorts: (inputId, outputId) => {
+      userChosePorts.current = true;
       disconnect();
       dispatch({ type: 'choosePorts', inputId, outputId });
     },
+    refreshPorts,
     connect: () => {
       connectAsync().catch(report);
     },
@@ -372,7 +399,8 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     dismissNotice: () => dispatch({ type: 'notice', notice: null }),
   }), [
     backUpPedalAsync, connectAsync, disconnect, enableMidiAsync, loadIntoLocationAsync,
-    openBackupAsync, readNames, renameOnPedalAsync, report, restoreBackupAsync, swapOnPedalAsync,
+    openBackupAsync, readNames, refreshPorts, renameOnPedalAsync, report, restoreBackupAsync,
+    swapOnPedalAsync,
   ]);
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

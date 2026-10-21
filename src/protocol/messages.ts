@@ -42,10 +42,7 @@ export function buildReadRequest(
 
 const equals = (field: string, value: string) => ({ op: 0, field, value });
 
-/*
- * The read requests below repeat the queries in the vendor app's product
- * definition. The pedal answers incompletely without the where/include parts.
- */
+/* The pedal answers incompletely without the where/include parts of these read requests. */
 
 export const buildSettingsRead = (sessionId: number): number[] => buildReadRequest(
   Command.SETTINGS_READ,

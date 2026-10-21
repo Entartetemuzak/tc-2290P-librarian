@@ -23,7 +23,7 @@ export interface Query {
 export function writeQuery(writer: ByteWriter, query: Query): void {
   writer.string(query.table);
   writer.vector(query.where ?? [], (w, filter) => {
-    // The comparator byte is always 0 (equals) in the vendor app.
+    // The comparator byte is always 0 (equals) in observed traffic.
     w.byte(filter.op).byte(0).string(filter.field).string(filter.value);
   });
   writer.vector(query.include ?? [], writeQuery);

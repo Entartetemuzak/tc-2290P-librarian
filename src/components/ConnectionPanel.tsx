@@ -5,7 +5,8 @@ import Led, { type LedState } from './Led';
 import Section from './Section';
 
 const MIDI_TEXT: Record<MidiStatus, string> = {
-  unsupported: 'This browser has no Web MIDI. Use Chrome, Edge, Opera or Firefox.',
+  unsupported: 'This browser has no Web MIDI. Use Chrome, Edge, Opera or Firefox, or on iOS an '
+    + 'app that adds Web MIDI to its browser.',
   idle: 'MIDI is off. Enable it to find the pedal.',
   requesting: 'Waiting for MIDI permission…',
   ready: 'MIDI enabled',
@@ -42,18 +43,16 @@ export default function ConnectionPanel() {
           <span>{MIDI_TEXT[state.midiStatus]}</span>
         </div>
         {state.midiError && <p className="small muted">{state.midiError}</p>}
-        {state.midiStatus !== 'unsupported' && (
-          <div className="button-row">
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={actions.enableMidi}
-              disabled={state.midiStatus === 'requesting'}
-            >
-              Enable MIDI
-            </button>
-          </div>
-        )}
+        <div className="button-row">
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={actions.enableMidi}
+            disabled={state.midiStatus === 'requesting'}
+          >
+            Enable MIDI
+          </button>
+        </div>
       </Section>
     );
   }
@@ -82,6 +81,10 @@ export default function ConnectionPanel() {
           {state.outputs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
+      <p className="small muted" style={{ margin: '0.5rem 0 0' }}>
+        {`Found ${state.inputs.length} input${state.inputs.length === 1 ? '' : 's'} and `
+          + `${state.outputs.length} output${state.outputs.length === 1 ? '' : 's'}.`}
+      </p>
       <div className="button-row">
         {connected ? (
           <button type="button" className="button" onClick={actions.disconnect}>Disconnect</button>
@@ -93,6 +96,11 @@ export default function ConnectionPanel() {
             disabled={!state.inputId || !state.outputId}
           >
             Connect
+          </button>
+        )}
+        {!connected && (
+          <button type="button" className="button" onClick={actions.refreshPorts}>
+            Refresh ports
           </button>
         )}
       </div>
